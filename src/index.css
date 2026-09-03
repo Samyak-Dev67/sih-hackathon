@@ -1,0 +1,543 @@
+﻿/* First Look - Simple Blue & White Theme with Reference Style */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+body {
+  background-color: #F8FAFC;
+  color: #0F172A;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* App Wrapper */
+.simple-app-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Top Navbar */
+.simple-navbar {
+  background: #FFFFFF;
+  border-bottom: 1px solid #E2E8F0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.nav-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.85rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+}
+
+.logo-box {
+  width: 38px;
+  height: 38px;
+  background: #1855F4;
+  color: #FFFFFF;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.1rem;
+  letter-spacing: -0.5px;
+}
+
+.brand-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.platform-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0F172A;
+  letter-spacing: -0.3px;
+}
+
+.platform-tagline {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #64748B;
+  letter-spacing: 1px;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.nav-btn {
+  background: none;
+  border: 1px solid transparent;
+  padding: 0.55rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #475569;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-btn:hover {
+  background: #F1F5F9;
+  color: #0F172A;
+}
+
+.nav-btn.active {
+  background: #EFF6FF;
+  color: #1855F4;
+}
+
+.nav-btn.primary-btn {
+  background: #1855F4;
+  color: #FFFFFF;
+}
+
+.nav-btn.primary-btn:hover {
+  background: #1345C7;
+}
+
+.logout-btn {
+  border: 1px solid #E2E8F0;
+  color: #DC2626;
+}
+
+.logout-btn:hover {
+  background: #FEF2F2;
+  color: #DC2626;
+}
+
+/* Main Content Viewport */
+.simple-main-content {
+  flex: 1;
+  max-width: 1000px;
+  width: 100%;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+
+/* ================= LANDING PAGE ================= */
+.hero-card {
+  background: #0A1128;
+  color: #FFFFFF;
+  border-radius: 16px;
+  padding: 3.5rem 3rem;
+  margin-bottom: 2.5rem;
+  box-shadow: 0 10px 25px -5px rgba(10, 17, 40, 0.25);
+  border: 1px solid #1E293B;
+}
+
+.hero-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #38BDF8;
+  margin-bottom: 1rem;
+}
+
+.hero-title {
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.5px;
+  margin-bottom: 1.2rem;
+}
+
+.hero-description {
+  font-size: 1.1rem;
+  color: #94A3B8;
+  max-width: 650px;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.hero-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn {
+  padding: 0.8rem 1.6rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.btn-blue {
+  background: #1855F4;
+  color: #FFFFFF;
+}
+
+.btn-blue:hover {
+  background: #1345C7;
+}
+
+.btn-white {
+  background: #FFFFFF;
+  color: #0F172A;
+}
+
+.btn-white:hover {
+  background: #F1F5F9;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid #CBD5E1;
+  color: #475569;
+}
+
+.btn-outline:hover {
+  background: #F1F5F9;
+}
+
+/* Info Section */
+.info-section {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  padding: 2.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.section-heading h2 {
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin-bottom: 0.75rem;
+}
+
+.section-heading p {
+  font-size: 1.05rem;
+  color: #64748B;
+  max-width: 750px;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.pillars-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.pillar-card {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.pillar-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #1855F4;
+  background: #EFF6FF;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+}
+
+.pillar-card h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin-bottom: 0.5rem;
+}
+
+.pillar-card p {
+  font-size: 0.92rem;
+  color: #64748B;
+  line-height: 1.55;
+}
+
+/* ================= LOGIN & SIGNUP PAGE ================= */
+.login-view {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0 3rem 0;
+}
+
+.auth-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  padding: 2.25rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.auth-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0F172A;
+  margin-bottom: 0.35rem;
+}
+
+.auth-header p {
+  font-size: 0.9rem;
+  color: #64748B;
+}
+
+/* Toggle Tabs */
+.auth-toggle {
+  display: flex;
+  background: #F1F5F9;
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+}
+
+.auth-toggle button {
+  flex: 1;
+  padding: 0.6rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #64748B;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.auth-toggle button.toggle-active {
+  background: #FFFFFF;
+  color: #0F172A;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Role Selector */
+.role-selector-block {
+  margin-bottom: 1.25rem;
+}
+
+.role-options {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.role-tab {
+  flex: 1;
+  background: #F8FAFC;
+  border: 1px solid #CBD5E1;
+  color: #475569;
+  padding: 0.6rem 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.role-tab:hover {
+  background: #F1F5F9;
+}
+
+.role-tab.selected {
+  background: #1855F4;
+  color: #FFFFFF;
+  border-color: #1855F4;
+}
+
+/* Forms */
+.simple-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.92rem;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #1855F4;
+}
+
+.submit-btn {
+  background: #1855F4;
+  color: #FFFFFF;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.85rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: background 0.2s;
+}
+
+.submit-btn:hover {
+  background: #1345C7;
+}
+
+.submit-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Status Notifications */
+.status-box {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  margin-bottom: 1rem;
+}
+
+.status-box.success {
+  background: #F0FDF4;
+  color: #166534;
+  border: 1px solid #BBF7D0;
+}
+
+.status-box.error {
+  background: #FEF2F2;
+  color: #991B1B;
+  border: 1px solid #FECACA;
+}
+
+/* Quick Test Jump */
+.quick-test-section {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #E2E8F0;
+  text-align: center;
+}
+
+.quick-test-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748B;
+  margin-bottom: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.quick-buttons {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.quick-btn {
+  background: #F1F5F9;
+  border: 1px solid #E2E8F0;
+  color: #334155;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-btn:hover {
+  background: #E2E8F0;
+  color: #0F172A;
+}
+
+/* ================= 3 SAMPLE ROLE PAGES ================= */
+.role-page-view {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+}
+
+.role-content-box {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  max-width: 700px;
+  width: 100%;
+  padding: 2.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.role-pill {
+  display: inline-block;
+  background: #EFF6FF;
+  color: #1855F4;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.3rem 0.75rem;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 1rem;
+}
+
+.role-content-box h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #0F172A;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.5px;
+}
+
+.sample-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  font-size: 1.05rem;
+  color: #475569;
+  line-height: 1.7;
+  border-left: 3px solid #1855F4;
+  padding-left: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.role-actions {
+  display: flex;
+  gap: 1rem;
+}
