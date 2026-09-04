@@ -99,6 +99,15 @@ function UniversityPage() {
     }
   };
 
+  const handleDeleteSolution = async (postId, solutionId) => {
+    const updated = await postService.deleteSolution(postId, solutionId, account);
+    if (updated) {
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, solutions: updated.solutions, solution: updated.solutions } : p));
+      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, solutions: updated.solutions, solution: updated.solutions } : prev));
+    }
+    return updated;
+  };
+
   return (
     <div className="app-shell">
       <Navbar 
@@ -129,6 +138,7 @@ function UniversityPage() {
           onVote={handleVote}
           onDownvote={handleDownvote}
           onSubmitSolution={handleSubmitSolution}
+          onDeleteSolution={handleDeleteSolution}
           onUpdateProblem={handleUpdateProblem}
           onDeleteProblem={handleDeleteProblem}
           onToggleResolve={handleToggleResolve}

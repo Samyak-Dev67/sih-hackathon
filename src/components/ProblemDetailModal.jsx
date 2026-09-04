@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CATEGORIES } from '../data/mockData';
-import { isPostAuthor, getPostAuthorInfo, getPostStatus } from '../services/api';
+import { isPostAuthor, getPostAuthorInfo, getPostStatus, isSolutionAuthor, postService } from '../services/api';
 
 export function ProblemDetailModal({ 
   post, 
@@ -9,6 +9,7 @@ export function ProblemDetailModal({
   onVote, 
   onDownvote,
   onSubmitSolution,
+  onDeleteSolution,
   onUpdateProblem,
   onDeleteProblem,
   onToggleResolve
@@ -168,6 +169,8 @@ export function ProblemDetailModal({
   const [showSolutionForm, setShowSolutionForm] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [deletingSolId, setDeletingSolId] = useState(null);
+  const [solDeleteError, setSolDeleteError] = useState('');
 
   const handleSolutionSubmit = async (e) => {
     e.preventDefault();
@@ -183,6 +186,8 @@ export function ProblemDetailModal({
         title: solTitle.trim(),
         desc: solApproach.trim(),
         proposed_approach: solApproach.trim(),
+        author_id: currentAccount?.id || null,
+        author_email: currentAccount?.email || null,
         author_name: authorDisplayName,
         author_role: userRole
       };
@@ -211,6 +216,30 @@ export function ProblemDetailModal({
       setFeedbackMsg(err.message || 'Error submitting solution.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDeleteSolution = async (solId) => {
+    if (!window.confirm('Are you sure you want to delete this solution? This cannot be undone.')) {
+      return;
+    }
+
+    setDeletingSolId(solId);
+    setSolDeleteError('');
+    try {
+      if (onDeleteSolution) {
+        await onDeleteSolution(id, solId);
+      } else {
+        await postService.deleteSolution(id, solId, currentAccount);
+      }
+      setActiveSolutions(prev => prev.filter(s => s.id !== solId));
+      setFeedbackMsg('✅ Your solution has been deleted.');
+      setTimeout(() => setFeedbackMsg(''), 4000);
+    } catch (err) {
+      console.error('Failed to delete solution:', err);
+      setSolDeleteError(err.message || 'Failed to delete solution.');
+    } finally {
+      setDeletingSolId(null);
     }
   };
 
@@ -580,6 +609,12 @@ export function ProblemDetailModal({
 
           {/* Solutions List */}
           <div className="solutions-list">
+            {solDeleteError && (
+              <div className="status-box error" style={{ margin: '0.75rem 0' }}>
+                {solDeleteError}
+              </div>
+            )}
+
             {activeSolutions.length === 0 ? (
               <div className="empty-solutions-card">
                 <p>No solutions submitted yet.</p>
@@ -590,28 +625,46 @@ export function ProblemDetailModal({
                 )}
               </div>
             ) : (
-              activeSolutions.map((sol, index) => (
-                <div key={sol.id || index} className="solution-item-card">
-                  <div className="solution-card-top">
-                    <div className="solution-org-info">
-                      <span className={`role-badge-tag ${sol.author_role === 'university' ? 'badge-uni' : 'badge-inds'}`}>
-                        {(sol.author_role || 'PARTNER').toUpperCase()}
-                      </span>
-                      <strong className="solution-org-title">{sol.author_name}</strong>
-                    </div>
-                    {sol.created_at && (
-                      <span className="solution-date-text">
-                        {new Date(sol.created_at).toLocaleDateString()}
-                      </span>
-                    )}
-                  </div>
+              activeSolutions.map((sol, index) => {
+                const isSolAuthor = isSolutionAuthor(sol, currentAccount);
+                return (
+                  <div key={sol.id || index} className="solution-item-card">
+                    <div className="solution-card-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div className="solution-org-info" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <span className={`role-badge-tag ${sol.author_role === 'university' ? 'badge-uni' : 'badge-inds'}`}>
+                          {(sol.author_role || 'PARTNER').toUpperCase()}
+                        </span>
+                        <strong className="solution-org-title">{sol.author_name}</strong>
+                        {isSolAuthor && <span className="author-badge-you">Your Solution</span>}
+                      </div>
 
-                  <h4 className="solution-title">{sol.title}</h4>
-                  <div className="solution-description-text">
-                    {sol.proposed_approach || sol.desc}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        {sol.created_at && (
+                          <span className="solution-date-text">
+                            {new Date(sol.created_at).toLocaleDateString()}
+                          </span>
+                        )}
+                        {isSolAuthor && (
+                          <button
+                            type="button"
+                            className="btn-delete-sol-item"
+                            onClick={() => handleDeleteSolution(sol.id)}
+                            disabled={deletingSolId === sol.id}
+                            title="Delete your solution"
+                          >
+                            {deletingSolId === sol.id ? 'Deleting...' : '🗑️ Delete'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <h4 className="solution-title">{sol.title}</h4>
+                    <div className="solution-description-text">
+                      {sol.proposed_approach || sol.desc}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 

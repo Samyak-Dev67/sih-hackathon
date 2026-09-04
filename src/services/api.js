@@ -242,6 +242,35 @@ export function isPostAuthor(post, currentAccount) {
 }
 
 /**
+ * Check if the currently authenticated or active account is the author of a solution.
+ */
+export function isSolutionAuthor(solution, currentAccount) {
+  if (!solution || !currentAccount) return false;
+
+  // 1. Direct author_id match (UUID or demo ID)
+  if (solution.author_id && currentAccount.id && solution.author_id === currentAccount.id) {
+    return true;
+  }
+
+  // 2. Direct author_email match
+  if (solution.author_email && currentAccount.email && solution.author_email.toLowerCase() === currentAccount.email.toLowerCase()) {
+    return true;
+  }
+
+  // 3. Match author_name with active user name
+  if (solution.author_name && currentAccount.name && solution.author_name.trim().toLowerCase() === currentAccount.name.trim().toLowerCase()) {
+    return true;
+  }
+
+  // 4. Match author_name with active user email prefix
+  if (solution.author_name && currentAccount.email && solution.author_name.trim().toLowerCase() === currentAccount.email.split('@')[0].trim().toLowerCase()) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Helper to get status of a post ('Resolved' or 'Open')
  * Evaluates the `resolved` boolean column from Supabase directly.
  */
@@ -738,7 +767,7 @@ export async function downvoteProblem(postId, accountId = 'default-account') {
  * Appends the solution object to the `solutions` JSON column in the Supabase `posts` table.
  * Caches locally so solutions remain immediately visible.
  */
-export async function submitSolution(postId, { title, desc, proposed_approach, author_name, author_role }) {
+export async function submitSolution(postId, { title, desc, proposed_approach, author_id, author_email, author_name, author_role }) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
     console.error('❌ [Supabase Connection Error]:', err.message);
@@ -746,18 +775,24 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
   }
 
   // Derive author details
+  let resolvedAuthorId = author_id || null;
+  let resolvedAuthorEmail = author_email || null;
   let resolvedAuthorName = author_name;
   let resolvedAuthorRole = author_role || 'university';
-  if (!resolvedAuthorName) {
-    try {
-      const saved = localStorage.getItem('fl_active_account');
-      if (saved) {
-        const parsed = JSON.parse(saved);
+
+  try {
+    const saved = localStorage.getItem('fl_active_account');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (!resolvedAuthorId && parsed.id) resolvedAuthorId = parsed.id;
+      if (!resolvedAuthorEmail && parsed.email) resolvedAuthorEmail = parsed.email;
+      if (!resolvedAuthorName) {
         resolvedAuthorName = parsed.name || (parsed.email ? parsed.email.split('@')[0] : null);
-        if (parsed.role) resolvedAuthorRole = parsed.role;
       }
-    } catch (e) {}
-  }
+      if (parsed.role) resolvedAuthorRole = parsed.role;
+    }
+  } catch (e) {}
+
   if (!resolvedAuthorName) resolvedAuthorName = 'Academic / Enterprise Partner';
 
   const solutionPayload = {
@@ -766,6 +801,8 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
     title: title.trim(),
     desc: desc.trim(),
     proposed_approach: (proposed_approach || desc).trim(),
+    author_id: resolvedAuthorId,
+    author_email: resolvedAuthorEmail,
     author_name: resolvedAuthorName,
     author_role: resolvedAuthorRole,
     created_at: new Date().toISOString()
@@ -859,6 +896,111 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
   };
 
   console.log(`✅ [Supabase UPDATE Success]: Solution saved to post #${postId} in Supabase:`, finalPost);
+  return finalPost;
+}
+
+/**
+ * 4c. Delete a Solution from Supabase (Solution Author Only)
+ * Removes a specific solution by id from the solutions JSON column.
+ */
+export async function deleteSolution(postId, solutionId, currentAccount) {
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
+  }
+
+  if (!postId || !solutionId) {
+    throw new Error('Problem ID and Solution ID are required to delete a solution.');
+  }
+
+  console.log(`📡 [Supabase UPDATE]: Deleting solution #${solutionId} from post #${postId}...`);
+
+  // 1. Fetch current post from Supabase
+  const { data: post, error: fetchErr } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('id', postId)
+    .single();
+
+  if (fetchErr) {
+    console.error('❌ [Supabase SELECT Error (deleteSolution)]:', fetchErr);
+    throw new Error(`Failed to fetch problem #${postId}: ${fetchErr.message}`);
+  }
+
+  const existingSolutions = Array.isArray(post.solutions)
+    ? post.solutions
+    : Array.isArray(post.solution)
+      ? post.solution
+      : [];
+
+  const targetSolution = existingSolutions.find(s => s.id === solutionId);
+  if (!targetSolution) {
+    console.warn(`⚠️ Solution #${solutionId} not found in post #${postId}.`);
+    return {
+      ...post,
+      solutions: existingSolutions,
+      solution: existingSolutions,
+      resolved: post.resolved === true,
+      status: post.resolved === true ? 'Resolved' : 'Open'
+    };
+  }
+
+  // Verify ownership
+  if (currentAccount && !isSolutionAuthor(targetSolution, currentAccount)) {
+    const err = new Error('Unauthorized: You can only delete solutions that you have posted.');
+    console.error('❌ [Auth Error]:', err.message);
+    throw err;
+  }
+
+  const updatedSolutions = existingSolutions.filter(s => s.id !== solutionId);
+
+  // 2. Update solutions in Supabase
+  let updateResult = null;
+  let updateError = null;
+
+  const { data: dataSolutions, error: errorSolutions } = await supabase
+    .from('posts')
+    .update({ solutions: updatedSolutions })
+    .eq('id', postId)
+    .select();
+
+  if (errorSolutions) {
+    if (errorSolutions.message?.includes('solution') || errorSolutions.code === 'PGRST204') {
+      const { data: dataSolution, error: errorSolution } = await supabase
+        .from('posts')
+        .update({ solution: updatedSolutions })
+        .eq('id', postId)
+        .select();
+
+      if (errorSolution) updateError = errorSolution;
+      else updateResult = dataSolution;
+    } else {
+      updateError = errorSolutions;
+    }
+  } else {
+    updateResult = dataSolutions;
+  }
+
+  if (updateError) {
+    console.error('❌ [Supabase UPDATE Error (deleteSolution)]:', updateError);
+    if (updateError.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked deleting solution on "posts.solutions".');
+    }
+    throw new Error(`Supabase failed to delete solution: ${updateError.message} (code: ${updateError.code})`);
+  }
+
+  const savedRecord = updateResult && updateResult.length > 0 ? updateResult[0] : post;
+  const isResolved = savedRecord.resolved === true;
+  const finalPost = {
+    ...savedRecord,
+    solutions: updatedSolutions,
+    solution: updatedSolutions,
+    resolved: isResolved,
+    status: isResolved ? 'Resolved' : 'Open'
+  };
+
+  console.log(`✅ [Supabase UPDATE Success]: Solution #${solutionId} successfully deleted from post #${postId}:`, finalPost);
   return finalPost;
 }
 
@@ -990,9 +1132,10 @@ export const postService = {
   likeProblem,
   likePost: likeProblem,
   downvoteProblem,
-  downvotePost: downvoteProblem,
   submitSolution,
-  getSolutions
+  deleteSolution,
+  getSolutions,
+  isSolutionAuthor
 };
 
 export const api = postService;
