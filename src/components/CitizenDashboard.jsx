@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { ProblemCard } from './ProblemCard';
 import { SubmitProblemForm } from './SubmitProblemForm';
 import { CATEGORIES } from '../data/mockData';
-import { filterProblems } from '../utils/search';
 
 export function CitizenDashboard({ 
   currentAccount, 
@@ -13,15 +12,31 @@ export function CitizenDashboard({
   onSubmitProblem,
   onUpdateProblem,
   onDeleteProblem,
-  onToggleResolve
+  onToggleResolve,
+  searchQuery: propSearchQuery,
+  onSearchChange: propOnSearchChange
 }) {
   const [showSubmitView, setShowSubmitView] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
 
-  const filteredPosts = filterProblems(posts, {
-    query: searchQuery,
-    category: selectedCategory
+  const activeSearch = propSearchQuery !== undefined ? propSearchQuery : localSearch;
+  const setActiveSearch = propOnSearchChange || setLocalSearch;
+
+  const cleanQ = (activeSearch || '').toLowerCase().trim();
+
+  // As you type only problems which match the title remain, others disappear; when empty, show all results
+  const filteredPosts = posts.filter(post => {
+    if (selectedCategory !== 'All' && (post.category || '').toLowerCase() !== selectedCategory.toLowerCase()) {
+      return false;
+    }
+    if (cleanQ) {
+      const titleStr = (post.title || '').toLowerCase();
+      if (!titleStr.includes(cleanQ)) {
+        return false;
+      }
+    }
+    return true;
   });
 
   return (
@@ -115,16 +130,16 @@ export function CitizenDashboard({
               <div className="feed-search-box">
                 <input 
                   type="text"
-                  placeholder="Search by keyword, ID (#), or category..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search problems by title..."
+                  value={activeSearch}
+                  onChange={(e) => setActiveSearch(e.target.value)}
                   className="feed-search-input"
                 />
-                {searchQuery && (
+                {activeSearch && (
                   <button 
                     type="button" 
                     className="feed-search-clear-btn" 
-                    onClick={() => setSearchQuery('')}
+                    onClick={() => setActiveSearch('')}
                     title="Clear search"
                   >
                     ✕
@@ -137,13 +152,13 @@ export function CitizenDashboard({
             <div className="problems-feed-stream">
               {filteredPosts.length === 0 ? (
                 <div className="empty-feed-card">
-                  {searchQuery || selectedCategory !== 'All' ? (
+                  {activeSearch || selectedCategory !== 'All' ? (
                     <>
                       <h3>No problems found</h3>
-                      <p>No issues match your current filters {searchQuery ? `("${searchQuery}")` : ''}.</p>
+                      <p>No problems match title "{activeSearch}".</p>
                       <button 
                         className="btn btn-outline"
-                        onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}
+                        onClick={() => { setActiveSearch(''); setSelectedCategory('All'); }}
                         style={{ marginTop: '0.5rem' }}
                       >
                         Reset Search Filters

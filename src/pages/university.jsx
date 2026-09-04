@@ -19,6 +19,10 @@ function UniversityPage() {
   
   const [posts, setPosts] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('search') || p.get('q') || '';
+  });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -135,12 +139,16 @@ function UniversityPage() {
         onToggleTheme={toggleTheme}
         onOpenAuth={() => { window.location.href = '/?auth=login&role=university'; }}
         onLogout={handleLogout}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
       <main className="app-main-viewport">
         <AuthGuard expectedRole="university" currentAccount={account}>
           <UniversityDashboard 
             currentAccount={account}
             posts={posts}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
             onVote={handleVote}
             onDownvote={handleDownvote}
             onSelectPost={(post) => setSelectedPost(post)}

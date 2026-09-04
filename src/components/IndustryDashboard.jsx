@@ -1,21 +1,36 @@
 import React, { useState } from 'react';
 import { ProblemCard } from './ProblemCard';
 import { CATEGORIES } from '../data/mockData';
-import { filterProblems } from '../utils/search';
 
 export function IndustryDashboard({ 
   currentAccount, 
   posts = [], 
   onVote, 
-  onDownvote,
-  onSelectPost 
+  onDownvote, 
+  onSelectPost,
+  searchQuery: propSearchQuery,
+  onSearchChange: propOnSearchChange
 }) {
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
 
-  const filteredPosts = filterProblems(posts, {
-    query: searchQuery,
-    category: selectedCategory
+  const activeSearch = propSearchQuery !== undefined ? propSearchQuery : localSearch;
+  const setActiveSearch = propOnSearchChange || setLocalSearch;
+
+  const cleanQ = (activeSearch || '').toLowerCase().trim();
+
+  // As you type only problems which match the title remain, others disappear; when empty, show all results
+  const filteredPosts = posts.filter(post => {
+    if (selectedCategory !== 'All' && (post.category || '').toLowerCase() !== selectedCategory.toLowerCase()) {
+      return false;
+    }
+    if (cleanQ) {
+      const titleStr = (post.title || '').toLowerCase();
+      if (!titleStr.includes(cleanQ)) {
+        return false;
+      }
+    }
+    return true;
   });
 
   return (
@@ -75,16 +90,16 @@ export function IndustryDashboard({
             <div className="feed-search-box">
               <input 
                 type="text"
-                placeholder="Search by keyword, ID (#), or category..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Filter problems by title..."
+                value={activeSearch}
+                onChange={(e) => setActiveSearch(e.target.value)}
                 className="feed-search-input"
               />
-              {searchQuery && (
+              {activeSearch && (
                 <button 
                   type="button" 
                   className="feed-search-clear-btn" 
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => setActiveSearch('')}
                   title="Clear search"
                 >
                   ✕
@@ -98,15 +113,15 @@ export function IndustryDashboard({
               <div className="empty-feed-card">
                 <h3>No citizen problems found</h3>
                 <p>
-                  {searchQuery || selectedCategory !== 'All'
-                    ? `No problems match your search filters ${searchQuery ? `("${searchQuery}")` : ''}.`
+                  {activeSearch || selectedCategory !== 'All'
+                    ? `No problems match title "${activeSearch}".`
                     : 'Check back soon or adjust your category search.'}
                 </p>
-                {(searchQuery || selectedCategory !== 'All') && (
+                {(activeSearch || selectedCategory !== 'All') && (
                   <button 
                     type="button"
                     className="btn btn-outline"
-                    onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}
+                    onClick={() => { setActiveSearch(''); setSelectedCategory('All'); }}
                     style={{ marginTop: '0.5rem' }}
                   >
                     Reset Search Filters

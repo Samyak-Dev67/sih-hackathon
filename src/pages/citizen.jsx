@@ -19,6 +19,10 @@ function CitizenPage() {
   
   const [posts, setPosts] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('search') || p.get('q') || '';
+  });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -154,12 +158,16 @@ function CitizenPage() {
         onToggleTheme={toggleTheme}
         onOpenAuth={() => { window.location.href = '/?auth=login&role=citizen'; }}
         onLogout={handleLogout}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
       <main className="app-main-viewport">
         <AuthGuard expectedRole="citizen" currentAccount={account}>
           <CitizenDashboard 
             currentAccount={account}
             posts={posts}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
             onVote={handleVote}
             onDownvote={handleDownvote}
             onSelectPost={(post) => setSelectedPost(post)}

@@ -19,6 +19,14 @@ function IndustryPage() {
   
   const [posts, setPosts] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [searchQuery, setSearchQuery] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('search') || params.get('q') || '';
+    } catch (e) {
+      return '';
+    }
+  });
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -135,6 +143,8 @@ function IndustryPage() {
         onToggleTheme={toggleTheme}
         onOpenAuth={() => { window.location.href = '/?auth=login&role=industry'; }}
         onLogout={handleLogout}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
       <main className="app-main-viewport">
         <AuthGuard expectedRole="industry" currentAccount={account}>
@@ -145,6 +155,8 @@ function IndustryPage() {
             onDownvote={handleDownvote}
             onSelectPost={(post) => setSelectedPost(post)}
             onToggleResolve={handleToggleResolve}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
           />
         </AuthGuard>
       </main>

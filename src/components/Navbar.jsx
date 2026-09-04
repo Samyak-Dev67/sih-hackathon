@@ -45,21 +45,19 @@ export function Navbar({
           </div>
         </a>
 
-        {/* Global Search Bar (Accessible to ANYBODY) */}
+        {/* Global Search Bar (Highlighted in Green) */}
         <div className="navbar-search-bar">
           <span className="navbar-search-icon">🔍</span>
           <input 
             type="text"
-            placeholder="Search problems by keyword, ID (#), or category..."
+            placeholder="Search problems by title..."
             value={currentQuery}
             onChange={(e) => handleQueryChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 if (activePage === 'landing') {
-                  const el = document.getElementById('search-problems');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
-                } else {
-                  window.location.href = `/?search=${encodeURIComponent(currentQuery || e.target.value)}#search-problems`;
+                  const targetPage = currentUser ? `/${currentUser.role}.html` : '/citizen.html';
+                  window.location.href = `${targetPage}?search=${encodeURIComponent(currentQuery || e.target.value)}`;
                 }
               }
             }}
@@ -86,21 +84,6 @@ export function Navbar({
             style={{ textDecoration: 'none' }}
           >
             Home / Info
-          </a>
-
-          <a 
-            href={activePage === 'landing' ? '#search-problems' : '/#search-problems'} 
-            className="nav-link-btn"
-            style={{ textDecoration: 'none' }}
-            onClick={(e) => {
-              if (activePage === 'landing') {
-                e.preventDefault();
-                const el = document.getElementById('search-problems');
-                if (el) el.scrollIntoView({ behavior: 'smooth' });
-              }
-            }}
-          >
-            Search Problems
           </a>
 
           {/* Show ONLY the logged-in user's relevant dashboard */}
