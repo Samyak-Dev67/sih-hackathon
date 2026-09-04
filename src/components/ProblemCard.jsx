@@ -1,109 +1,112 @@
-import React from 'react';
-import { ChevronUp, ChevronDown, MessageSquare, GraduationCap, Clock, ArrowRight } from 'lucide-react';
+﻿import React from 'react';
 
-export function ProblemCard({ problem, onVote, onSelectProblem }) {
-  const isUpvoted = problem.hasUpvoted;
+export function ProblemCard({ post, onVote, onSelectPost, currentAccountId }) {
+  const {
+    id,
+    title,
+    desc,
+    img,
+    category,
+    score = 0,
+    created_at,
+    liked_by = [],
+    solutions = []
+  } = post;
+
+  const hasLiked = liked_by.includes(currentAccountId);
+
+  // Format relative time
+  const getTimeAgo = (dateStr) => {
+    try {
+      const diffMs = Date.now() - new Date(dateStr).getTime();
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      if (diffHours < 1) return 'Just now';
+      if (diffHours < 24) return `${diffHours} hours ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      return `${diffDays} days ago`;
+    } catch (e) {
+      return 'Recent';
+    }
+  };
 
   return (
-    <article className="problem-card">
-      <div className="vote-sidebar-column">
+    <div className="problem-card">
+      {/* Upvote Column - Enforces 1 like per account */}
+      <div className="vote-column">
         <button 
-          className={`vote-chevron-btn up ${isUpvoted ? 'voted' : ''}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onVote(problem.id, 1);
-          }}
-          title="Upvote this problem"
-          aria-label="Upvote"
+          type="button"
+          className={`vote-arrow ${hasLiked ? 'active-up' : ''}`}
+          onClick={(e) => { e.stopPropagation(); onVote(id); }}
+          title={hasLiked ? "You liked this (click to remove)" : "Click to like (1 like per account)"}
+          aria-label="Like"
         >
-          <ChevronUp size={20} />
+          ▲
         </button>
-
-        <span className={`vote-count-number ${isUpvoted ? 'voted' : ''}`}>
-          {problem.upvotes}
+        <span className={`vote-count ${hasLiked ? 'vote-count-up' : ''}`}>
+          {score}
         </span>
-
         <button 
-          className="vote-chevron-btn down"
-          onClick={(e) => {
-            e.stopPropagation();
-            onVote(problem.id, -1);
-          }}
-          title="Downvote this problem"
+          type="button"
+          className="vote-arrow"
+          onClick={(e) => { e.stopPropagation(); onVote(id); }}
+          title={hasLiked ? "Remove like" : "Like"}
           aria-label="Downvote"
         >
-          <ChevronDown size={20} />
+          ▼
         </button>
       </div>
 
-      <div className="problem-card-body" onClick={() => onSelectProblem(problem)}>
-        <div className="problem-card-header">
-          <div className="org-meta-left">
-            <div className="org-avatar-badge">
-              <span>{problem.orgInitials || problem.orgName.slice(0, 2).toUpperCase()}</span>
+      {/* Main Problem Content */}
+      <div className="problem-body" onClick={() => onSelectPost(post)}>
+        {/* Header Row */}
+        <div className="problem-header-row">
+          <div className="author-meta-block">
+            <div className="author-avatar-circle">
+              C1
             </div>
-            <div className="org-title-and-meta">
-              <span className="org-name-text">{problem.orgName}</span>
-              <span className="org-subtext-meta">
-                {problem.orgType} � {problem.postedTime}
-              </span>
+            <div className="author-details">
+              <span className="author-name">Citizen Account</span>
+              <span className="role-badge-tag badge-citz">CITIZEN</span>
+              <span className="author-time">• {getTimeAgo(created_at)}</span>
             </div>
           </div>
 
-          <div className="card-status-badge open">
-            <span>{problem.status || 'OPEN'}</span>
+          <div className="status-container">
+            <span className="tag-pill category-tag">{category || 'General'}</span>
           </div>
         </div>
 
-        <h2 className="problem-card-title">
-          {problem.title}
-        </h2>
+        {/* Title */}
+        <h3 className="problem-title">{title}</h3>
 
-        <p className="problem-card-summary">
-          {problem.summary}
-        </p>
+        {/* Description */}
+        <p className="problem-desc-snippet">{desc}</p>
 
-        <div className="problem-tags-row">
-          {problem.tags.map((tag, idx) => (
-            <span key={idx} className="problem-tag-chip">
-              {tag}
-            </span>
-          ))}
-          {problem.bountyOrGrant && (
-            <span className="problem-grant-chip">
-              {problem.bountyOrGrant}
-            </span>
-          )}
-        </div>
+        {/* Image if applicable */}
+        {img && (
+          <div className="problem-card-image-wrap" style={{ margin: '0.5rem 0', maxHeight: '200px', overflow: 'hidden', borderRadius: '8px' }}>
+            <img src={img} alt={title} style={{ width: '100%', height: 'auto', objectFit: 'cover' }} />
+          </div>
+        )}
 
-        <div className="problem-card-footer">
-          <div className="footer-metrics-group">
-            <span className="metric-pill">
-              <MessageSquare size={14} className="metric-icon" />
-              <span>{problem.contributorsCount} contributors</span>
-            </span>
-            <span className="metric-pill">
-              <GraduationCap size={15} className="metric-icon" />
-              <span>{problem.universityTeamsCount} university teams</span>
-            </span>
-            <span className="metric-pill">
-              <Clock size={14} className="metric-icon" />
-              <span>{problem.daysLeft} days left</span>
-            </span>
+        {/* Footer Meta Row */}
+        <div className="problem-footer-row">
+          <div className="problem-tags-group">
+            <span className="tag-pill">ID #{id}</span>
+            <span className="tag-pill">Score: {score}</span>
           </div>
 
-          <button 
-            className="view-problem-action-btn"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectProblem(problem);
-            }}
-          >
-            <span>View problem</span>
-            <ArrowRight size={14} className="arrow-indicator" />
-          </button>
+          {/* Solutions indicator - never called "comments" */}
+          <div className="solutions-indicator">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span className="solutions-count-text">
+              {solutions.length} {solutions.length === 1 ? 'Solution' : 'Solutions'}
+            </span>
+          </div>
         </div>
       </div>
-    </article>
+    </div>
   );
 }
