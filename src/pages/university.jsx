@@ -63,8 +63,39 @@ function UniversityPage() {
   const handleSubmitSolution = async (postId, solData) => {
     const updated = await postService.submitSolution(postId, solData);
     if (updated) {
-      setPosts(prev => prev.map(p => p.id === postId ? updated : p));
-      if (selectedPost && selectedPost.id === postId) setSelectedPost(updated);
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, solutions: updated.solutions } : p));
+      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, solutions: updated.solutions } : prev));
+    }
+  };
+
+  const handleToggleResolve = async (postId, newStatus) => {
+    const updated = await postService.toggleProblemStatus(postId, newStatus, account);
+    if (updated) {
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, status: updated.status } : p));
+      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, status: updated.status } : prev));
+    }
+    return updated;
+  };
+
+  const handleUpdateProblem = async (postId, updatedFields) => {
+    let updated;
+    if (updatedFields.imageFile) {
+      updated = await postService.uploadImageAndUpdatePost(postId, updatedFields.imageFile, updatedFields);
+    } else {
+      updated = await postService.updatePost(postId, updatedFields);
+    }
+    if (updated) {
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated } : p));
+      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated } : prev));
+    }
+    return updated;
+  };
+
+  const handleDeleteProblem = async (postId) => {
+    await postService.deletePost(postId);
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    if (selectedPost && selectedPost.id === postId) {
+      setSelectedPost(null);
     }
   };
 
@@ -86,6 +117,7 @@ function UniversityPage() {
             onVote={handleVote}
             onDownvote={handleDownvote}
             onSelectPost={(post) => setSelectedPost(post)}
+            onToggleResolve={handleToggleResolve}
           />
         </AuthGuard>
       </main>
@@ -97,6 +129,9 @@ function UniversityPage() {
           onVote={handleVote}
           onDownvote={handleDownvote}
           onSubmitSolution={handleSubmitSolution}
+          onUpdateProblem={handleUpdateProblem}
+          onDeleteProblem={handleDeleteProblem}
+          onToggleResolve={handleToggleResolve}
         />
       )}
     </div>

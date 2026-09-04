@@ -1,4 +1,4 @@
-﻿// Schema:
+// Schema:
 // posts
 // - id: int8
 // - created_at: timestamptz
@@ -74,19 +74,19 @@ export const INITIAL_POSTS = [
 export const DEMO_ACCOUNTS = {
   citizen: {
     id: "citizen-account-1",
-    name: "Citizen Account 1",
-    email: "citizen1@demo.org",
+    name: "Alex Rivera",
+    email: "alex.rivera@demo.org",
     role: "citizen",
     roleBadge: "CITZ",
-    initials: "C1"
+    initials: "AR"
   },
   citizen2: {
     id: "citizen-account-2",
-    name: "Citizen Account 2",
-    email: "citizen2@demo.org",
+    name: "Jordan Lee",
+    email: "jordan.lee@demo.org",
     role: "citizen",
     roleBadge: "CITZ",
-    initials: "C2"
+    initials: "JL"
   },
   university: {
     id: "university-account-1",

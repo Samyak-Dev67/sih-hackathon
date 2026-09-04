@@ -9,7 +9,10 @@ export function CitizenDashboard({
   onVote, 
   onDownvote,
   onSelectPost, 
-  onSubmitProblem 
+  onSubmitProblem,
+  onUpdateProblem,
+  onDeleteProblem,
+  onToggleResolve
 }) {
   const [showSubmitView, setShowSubmitView] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -149,6 +152,9 @@ export function CitizenDashboard({
                     onDownvote={onDownvote}
                     onSelectPost={onSelectPost}
                     currentAccountId={currentAccount?.id}
+                    currentAccount={currentAccount}
+                    onDeleteProblem={onDeleteProblem}
+                    onToggleResolve={onToggleResolve}
                   />
                 ))
               )}

@@ -105,6 +105,7 @@ export function IndustryDashboard({
                   onDownvote={onDownvote}
                   onSelectPost={onSelectPost}
                   currentAccountId={currentAccount?.id}
+                  currentAccount={currentAccount}
                 />
               ))
             )}

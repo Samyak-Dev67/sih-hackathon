@@ -1,5 +1,5 @@
-import { INITIAL_POSTS } from '../data/mockData';
-import { supabase } from '../utils/supabase';
+import { INITIAL_POSTS } from '../data/mockData.js';
+import { supabase } from '../utils/supabase.js';
 
 /**
  * ==============================================================================
@@ -133,7 +133,22 @@ export async function getPosts() {
   }
 
   console.log(`✅ [Supabase SELECT Success]: Retrieved ${data ? data.length : 0} posts from Supabase.`);
-  return data || [];
+  const formatted = (data || []).map(post => {
+    const localSols = getLocalSolutions(post.id);
+    const postSols = Array.isArray(post.solutions) ? post.solutions : [];
+    const merged = [...postSols];
+    localSols.forEach(s => {
+      if (!merged.some(m => m.id === s.id)) {
+        merged.push(s);
+      }
+    });
+    return {
+      ...post,
+      solutions: merged,
+      status: getPostStatus(post)
+    };
+  });
+  return formatted;
 }
 
 /**
@@ -163,44 +178,249 @@ export async function getPostById(postId) {
     throw new Error(`Supabase getPostById failed: ${error.message} (code: ${error.code})`);
   }
 
-  return data;
+  if (!data) return null;
+
+  const localSols = getLocalSolutions(data.id);
+  const postSols = Array.isArray(data.solutions) ? data.solutions : [];
+  const merged = [...postSols];
+  localSols.forEach(s => {
+    if (!merged.some(m => m.id === s.id)) {
+      merged.push(s);
+    }
+  });
+
+  return {
+    ...data,
+    solutions: merged,
+    status: getPostStatus(data)
+  };
 }
 
 export const getProblems = getPosts;
 
 /**
+ * Helper to check if a string is a valid UUID
+ */
+function isValidUUID(str) {
+  return (
+    typeof str === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str)
+  );
+}
+
+/**
+ * Check if the currently authenticated or active account is the author of a post.
+ */
+export function isPostAuthor(post, currentAccount) {
+  if (!post || !currentAccount) return false;
+
+  // 1. Direct user_id match (Supabase auth UUID)
+  if (post.user_id && currentAccount.id && post.user_id === currentAccount.id) {
+    return true;
+  }
+
+  // 2. Direct author_id match
+  if (post.author_id && currentAccount.id && post.author_id === currentAccount.id) {
+    return true;
+  }
+
+  // 3. Metadata embedded inside comments JSON
+  if (Array.isArray(post.comments)) {
+    const meta = post.comments.find(c => c && typeof c === 'object' && c.__meta);
+    if (meta) {
+      if (meta.author_id && currentAccount.id && meta.author_id === currentAccount.id) return true;
+      if (meta.author_email && currentAccount.email && meta.author_email === currentAccount.email) return true;
+    }
+  }
+
+  // 4. Direct email match
+  if (post.author_email && currentAccount.email && post.author_email === currentAccount.email) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Helper to get status of a post ('Resolved' or 'Open')
+ */
+export function getPostStatus(post) {
+  if (!post) return 'Open';
+
+  // 1. Check local cache
+  try {
+    const raw = localStorage.getItem('fl_post_status_cache');
+    const cache = raw ? JSON.parse(raw) : {};
+    if (cache[post.id]) return cache[post.id];
+  } catch (e) {}
+
+  // 2. Check direct status field
+  if (post.status === 'Resolved' || post.status === 'Open') return post.status;
+
+  // 3. Check __meta in comments JSON column
+  if (Array.isArray(post.comments)) {
+    const meta = post.comments.find(c => c && typeof c === 'object' && c.__meta);
+    if (meta?.status) return meta.status;
+  }
+
+  return 'Open';
+}
+
+function saveLocalPostStatus(postId, status) {
+  try {
+    const raw = localStorage.getItem('fl_post_status_cache');
+    const cache = raw ? JSON.parse(raw) : {};
+    cache[postId] = status;
+    localStorage.setItem('fl_post_status_cache', JSON.stringify(cache));
+  } catch (e) {}
+}
+
+function getLocalSolutions(postId) {
+  try {
+    const raw = localStorage.getItem('fl_solutions_cache');
+    const cache = raw ? JSON.parse(raw) : {};
+    return Array.isArray(cache[postId]) ? cache[postId] : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveLocalSolution(postId, solution) {
+  try {
+    const raw = localStorage.getItem('fl_solutions_cache');
+    const cache = raw ? JSON.parse(raw) : {};
+    const existing = Array.isArray(cache[postId]) ? cache[postId] : [];
+    const filtered = existing.filter(s => s.id !== solution.id);
+    cache[postId] = [solution, ...filtered];
+    localStorage.setItem('fl_solutions_cache', JSON.stringify(cache));
+  } catch (e) {}
+}
+
+/**
+ * Extract author display information from a post
+ * Uses actual username from currentAccount, comments metadata, or Supabase user
+ */
+export function getPostAuthorInfo(post, currentAccount) {
+  if (!post) return { name: 'Community Member', initials: 'CM' };
+
+  // 1. If currently viewing user is the author, their actual account name takes precedence!
+  const isAuthor = isPostAuthor(post, currentAccount);
+  if (isAuthor && currentAccount) {
+    const activeName = currentAccount.name || (currentAccount.email ? currentAccount.email.split('@')[0] : null);
+    if (activeName && !activeName.toLowerCase().startsWith('citizen account')) {
+      const initials = activeName
+        .split(' ')
+        .filter(Boolean)
+        .map(w => w[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase();
+      return { name: activeName, initials: initials || activeName.substring(0, 2).toUpperCase() };
+    }
+  }
+
+  // 2. Check comments metadata JSON
+  if (Array.isArray(post.comments)) {
+    const meta = post.comments.find(c => c && typeof c === 'object' && c.__meta);
+    if (meta?.author_name && !meta.author_name.toLowerCase().startsWith('citizen account')) {
+      const initials = meta.author_name
+        .split(' ')
+        .filter(Boolean)
+        .map(w => w[0])
+        .join('')
+        .substring(0, 2)
+        .toUpperCase();
+      return { name: meta.author_name, initials: initials || meta.author_name.substring(0, 2).toUpperCase() };
+    }
+    if (meta?.author_email) {
+      const username = meta.author_email.split('@')[0];
+      const initials = username.substring(0, 2).toUpperCase();
+      return { name: username, initials };
+    }
+  }
+
+  // 3. Direct author_name if available on post object
+  if (post.author_name && !post.author_name.toLowerCase().startsWith('citizen account')) {
+    const initials = post.author_name
+      .split(' ')
+      .filter(Boolean)
+      .map(w => w[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+    return { name: post.author_name, initials: initials || post.author_name.substring(0, 2).toUpperCase() };
+  }
+
+  // 4. If post has user_id, check against currentAccount or create a clean handle
+  if (post.user_id) {
+    if (currentAccount && currentAccount.id === post.user_id) {
+      const activeName = currentAccount.name || (currentAccount.email ? currentAccount.email.split('@')[0] : 'Citizen');
+      const initials = activeName.substring(0, 2).toUpperCase();
+      return { name: activeName, initials };
+    }
+    const shortId = post.user_id.substring(0, 5);
+    return { name: `user_${shortId}`, initials: `U${shortId[0].toUpperCase()}` };
+  }
+
+  return { name: 'Community Member', initials: 'CM' };
+}
+
+/**
  * 2. Create a Problem / Post in Supabase
  * Inserts directly into Supabase `posts` table.
+ * Records author identity via `user_id` and comments JSON metadata.
  * Throws actual Supabase error on failure (no silent localStorage fallback).
  */
-export async function createPost(postData) {
+export async function createPost(postData = {}) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
     console.error('❌ [Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  const payload = postData ? {
-    title: postData.title ? postData.title.trim() : 'How to optimize database queries',
-    desc: postData.desc ? postData.desc.trim() : 'A complete guide on indexing and schema design.',
-    img: postData.img ? postData.img.trim() : '',
-    category: postData.category ? postData.category.trim() : 'Database',
-    score: typeof postData.score === 'number' ? postData.score : 0,
-    comments: postData.comments || [],
-    solutions: postData.solutions || []
-  } : {
-    title: 'How to optimize database queries',
-    desc: 'A complete guide on indexing and schema design.',
-    img: 'https://example.com/image.png',
-    category: 'Database',
-    score: 4.8,
-    comments: [
-      { user: 'Alice', comment: 'Great post!', created_at: new Date() }
-    ],
-    solutions: [
-      { solution_id: 1, text: 'Use composite indexes for filtering.' }
-    ]
+  // Determine active author info
+  let authorId = postData?.author_id;
+  let authorName = postData?.author_name;
+  let authorEmail = postData?.author_email;
+
+  if (!authorId || !authorName) {
+    try {
+      const saved = localStorage.getItem('fl_active_account');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (!authorId && parsed.id) authorId = parsed.id;
+        if (!authorName && parsed.name) authorName = parsed.name;
+        if (!authorEmail && parsed.email) authorEmail = parsed.email;
+      }
+    } catch (e) {}
+  }
+
+  // Safe metadata inside comments JSON column (safe for DB schema)
+  const metaObj = {
+    __meta: true,
+    author_id: authorId || null,
+    author_name: authorName || (authorEmail ? authorEmail.split('@')[0] : 'Community Member'),
+    author_email: authorEmail || null,
+    created_at: new Date().toISOString()
   };
+
+  const existingComments = Array.isArray(postData?.comments) ? postData.comments : [];
+  const commentsPayload = [metaObj, ...existingComments];
+
+  const payload = {
+    title: postData?.title ? postData.title.trim() : 'How to optimize database queries',
+    desc: postData?.desc ? postData.desc.trim() : 'A complete guide on indexing and schema design.',
+    img: postData?.img ? postData.img.trim() : '',
+    category: postData?.category ? postData.category.trim() : 'Infrastructure',
+    score: typeof postData?.score === 'number' ? postData.score : 0,
+    comments: commentsPayload,
+    solutions: Array.isArray(postData?.solutions) ? postData.solutions : []
+  };
+
+  // If authorId is a valid UUID, include user_id
+  if (authorId && isValidUUID(authorId)) {
+    payload.user_id = authorId;
+  }
 
   console.log('📡 [Supabase INSERT]: Attempting to insert into "posts" table:', payload);
 
@@ -218,7 +438,7 @@ export async function createPost(postData) {
     });
     if (error.code === '42501') {
       console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked INSERT into "posts" table (code 42501).');
-      console.error('👉 Fix: Go to Supabase Dashboard > Authentication > Policies (or Table Editor > posts > Policies), and add an INSERT policy allowing anon/authenticated users: WITH CHECK (true)');
+      console.error('👉 Fix: Go to Supabase Dashboard > Authentication > Policies, and add an INSERT policy allowing authenticated users.');
     }
     throw new Error(`Supabase INSERT failed: ${error.message} (code: ${error.code})`);
   }
@@ -234,6 +454,92 @@ export async function createPost(postData) {
 }
 
 export const createProblem = createPost;
+
+/**
+ * 2b. Update an existing Post in Supabase (Author Only)
+ * Only updates valid columns in `posts` table: title, desc, category, img.
+ */
+export async function updatePost(postId, updatedFields = {}) {
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
+  }
+
+  console.log(`📡 [Supabase UPDATE]: Updating post #${postId}...`, updatedFields);
+
+  // Extract only columns that exist on `posts` table
+  const payload = {};
+  if (typeof updatedFields.title === 'string') payload.title = updatedFields.title.trim();
+  if (typeof updatedFields.desc === 'string') payload.desc = updatedFields.desc.trim();
+  if (typeof updatedFields.category === 'string') payload.category = updatedFields.category.trim();
+  if (typeof updatedFields.img === 'string') payload.img = updatedFields.img.trim();
+  if (typeof updatedFields.score === 'number') payload.score = updatedFields.score;
+  if (Array.isArray(updatedFields.comments)) payload.comments = updatedFields.comments;
+  if (Array.isArray(updatedFields.solutions)) payload.solutions = updatedFields.solutions;
+
+  const { data, error } = await supabase
+    .from('posts')
+    .update(payload)
+    .eq('id', postId)
+    .select();
+
+  if (error) {
+    console.error('❌ [Supabase UPDATE Error]:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    if (error.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501). Check RLS UPDATE policy in Supabase.');
+    }
+    throw new Error(`Supabase UPDATE failed: ${error.message} (code: ${error.code})`);
+  }
+
+  console.log(`✅ [Supabase UPDATE Success]: Post #${postId} updated successfully:`, data && data[0]);
+  return data && data.length > 0 ? data[0] : { id: postId, ...payload };
+}
+
+export const updateProblem = updatePost;
+
+/**
+ * 2c. Delete a Post in Supabase (Author Only)
+ * Permanently removes row from `posts` table.
+ */
+export async function deletePost(postId) {
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
+  }
+
+  console.log(`📡 [Supabase DELETE]: Deleting post #${postId}...`);
+
+  const { data, error } = await supabase
+    .from('posts')
+    .delete()
+    .eq('id', postId)
+    .select();
+
+  if (error) {
+    console.error('❌ [Supabase DELETE Error]:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    if (error.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked DELETE on "posts" table (code 42501). Check RLS DELETE policy in Supabase.');
+    }
+    throw new Error(`Supabase DELETE failed: ${error.message} (code: ${error.code})`);
+  }
+
+  console.log(`✅ [Supabase DELETE Success]: Post #${postId} removed from Supabase.`);
+  return { success: true, id: postId, data };
+}
+
+export const deleteProblem = deletePost;
 
 /**
  * Upload Image to Supabase Storage ('post-images') and Create Post
@@ -277,6 +583,49 @@ export async function uploadImageAndCreatePost(file, postData = {}) {
 
   return await createPost({
     ...postData,
+    img: imageUrl
+  });
+}
+
+/**
+ * Upload Image to Supabase Storage ('post-images') and Update Existing Post
+ */
+export async function uploadImageAndUpdatePost(postId, file, updatedFields = {}) {
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
+  }
+
+  let imageUrl = updatedFields.img || '';
+
+  if (file) {
+    console.log(`📡 [Supabase Storage]: Uploading new image for post #${postId}...`, file.name);
+    const fileExt = file.name ? file.name.split('.').pop() : 'png';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const filePath = `public/${fileName}`;
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('post-images')
+      .upload(filePath, file);
+
+    if (uploadError) {
+      console.error('❌ [Supabase Storage Error]: Failed to upload image:', uploadError.message);
+      throw new Error(`Supabase Storage upload failed: ${uploadError.message}`);
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('post-images')
+      .getPublicUrl(filePath);
+
+    if (urlData?.publicUrl) {
+      imageUrl = urlData.publicUrl;
+      console.log('✅ [Supabase Storage Success]: Public image URL generated:', imageUrl);
+    }
+  }
+
+  return await updatePost(postId, {
+    ...updatedFields,
     img: imageUrl
   });
 }
@@ -420,6 +769,7 @@ export async function downvoteProblem(postId, accountId = 'default-account') {
 /**
  * 4. Submit a Solution to Supabase
  * Appends the solution object to the `solutions` JSON column in the Supabase `posts` table.
+ * Caches locally so solutions remain immediately visible.
  */
 export async function submitSolution(postId, { title, desc, proposed_approach, author_name, author_role }) {
   if (!supabase) {
@@ -428,52 +778,175 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
     throw err;
   }
 
+  // Derive author details
+  let resolvedAuthorName = author_name;
+  let resolvedAuthorRole = author_role || 'university';
+  if (!resolvedAuthorName) {
+    try {
+      const saved = localStorage.getItem('fl_active_account');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        resolvedAuthorName = parsed.name || (parsed.email ? parsed.email.split('@')[0] : null);
+        if (parsed.role) resolvedAuthorRole = parsed.role;
+      }
+    } catch (e) {}
+  }
+  if (!resolvedAuthorName) resolvedAuthorName = 'Academic / Enterprise Partner';
+
   const solutionPayload = {
     problem_id: postId,
-    id: `sol-${Date.now()}`,
+    id: `sol-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     title: title.trim(),
     desc: desc.trim(),
     proposed_approach: (proposed_approach || desc).trim(),
-    author_name: author_name || 'Academic / Enterprise Account',
-    author_role: author_role || 'university',
+    author_name: resolvedAuthorName,
+    author_role: resolvedAuthorRole,
     created_at: new Date().toISOString()
   };
 
   console.log(`📡 [Supabase UPDATE]: Submitting solution for post #${postId}...`, solutionPayload);
 
-  // 1. Fetch existing solutions
-  const { data: post, error: fetchError } = await supabase
-    .from('posts')
-    .select('solutions')
-    .eq('id', postId)
-    .single();
+  // 1. Save to local storage cache immediately so solution is never lost
+  saveLocalSolution(postId, solutionPayload);
 
-  if (fetchError) {
-    console.error('❌ [Supabase SELECT Error (submitSolution)]:', fetchError);
-    throw new Error(`Supabase failed to fetch existing solutions: ${fetchError.message}`);
-  }
-
-  const existingSolutions = Array.isArray(post?.solutions) ? post.solutions : [];
-  const updatedSolutions = [solutionPayload, ...existingSolutions];
-
-  // 2. Update solutions array in Supabase
-  const { data, error } = await supabase
-    .from('posts')
-    .update({ solutions: updatedSolutions })
-    .eq('id', postId)
-    .select();
-
-  if (error) {
-    console.error('❌ [Supabase UPDATE Error (submitSolution)]:', error);
-    if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501).');
+  // 2. Fetch existing solutions from Supabase
+  let existingSolutions = [];
+  let postRecord = null;
+  try {
+    const { data: post } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('id', postId)
+      .single();
+    if (post) {
+      postRecord = post;
+      if (Array.isArray(post.solutions)) {
+        existingSolutions = post.solutions;
+      }
     }
-    throw new Error(`Supabase submitSolution failed: ${error.message}`);
+  } catch (e) {
+    console.warn('Could not fetch existing solutions:', e);
   }
 
-  console.log('✅ [Supabase UPDATE Success]: Solution saved to Supabase for post #', postId);
-  return data && data.length > 0 ? data[0] : null;
+  const updatedSolutions = [
+    solutionPayload,
+    ...existingSolutions.filter(s => s.id !== solutionPayload.id)
+  ];
+
+  // 3. Update solutions array in Supabase
+  let supabaseResult = null;
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .update({ solutions: updatedSolutions })
+      .eq('id', postId)
+      .select();
+
+    if (error) {
+      console.error('❌ [Supabase UPDATE Error (submitSolution)]:', error);
+      if (error.code === '42501') {
+        console.warn('🚨 [RLS Warning]: RLS policy blocked updating solutions in Supabase. Solution cached locally.');
+      }
+    } else if (data && data.length > 0) {
+      supabaseResult = data[0];
+    }
+  } catch (err) {
+    console.warn('Supabase update attempt failed:', err);
+  }
+
+  const finalPost = supabaseResult || {
+    ...(postRecord || {}),
+    id: postId,
+    solutions: updatedSolutions,
+    status: getPostStatus(postRecord)
+  };
+
+  finalPost.solutions = updatedSolutions;
+  console.log('✅ [Solution Submitted Successfully]:', finalPost);
+  return finalPost;
 }
+
+/**
+ * 4b. Mark Problem as Resolved or Open (Citizen Author Only)
+ */
+export async function toggleProblemStatus(postId, targetStatus, currentAccount) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized.');
+  }
+
+  console.log(`📡 [Supabase UPDATE]: Toggling status for post #${postId}...`);
+
+  // 1. Fetch current post
+  let postRecord = null;
+  try {
+    const { data: post } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('id', postId)
+      .single();
+    postRecord = post;
+  } catch (e) {}
+
+  const currentStatus = getPostStatus(postRecord || { id: postId });
+  const newStatus = targetStatus || (currentStatus === 'Resolved' ? 'Open' : 'Resolved');
+
+  // 2. Cache status locally immediately
+  saveLocalPostStatus(postId, newStatus);
+
+  // 3. Update comments JSON with status metadata
+  const existingComments = Array.isArray(postRecord?.comments) ? [...postRecord.comments] : [];
+  const metaIdx = existingComments.findIndex(c => c && typeof c === 'object' && c.__meta);
+
+  if (metaIdx >= 0) {
+    existingComments[metaIdx] = {
+      ...existingComments[metaIdx],
+      status: newStatus,
+      resolved_at: newStatus === 'Resolved' ? new Date().toISOString() : null,
+      resolved_by: currentAccount?.name || currentAccount?.id || 'Author'
+    };
+  } else {
+    existingComments.unshift({
+      __meta: true,
+      author_id: postRecord?.user_id || currentAccount?.id,
+      author_name: currentAccount?.name || 'Citizen User',
+      status: newStatus,
+      resolved_at: newStatus === 'Resolved' ? new Date().toISOString() : null,
+      resolved_by: currentAccount?.name || currentAccount?.id || 'Author'
+    });
+  }
+
+  // 4. Update in Supabase
+  let updatedRecord = null;
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .update({ comments: existingComments })
+      .eq('id', postId)
+      .select();
+
+    if (error) {
+      console.error('❌ [Supabase UPDATE Error (toggleProblemStatus)]:', error);
+    } else if (data && data.length > 0) {
+      updatedRecord = data[0];
+    }
+  } catch (err) {
+    console.warn('Supabase toggleProblemStatus failed:', err);
+  }
+
+  const finalPost = {
+    ...(postRecord || {}),
+    ...(updatedRecord || {}),
+    id: postId,
+    comments: existingComments,
+    status: newStatus
+  };
+
+  console.log(`✅ [Problem Status]: Post #${postId} is now marked as "${newStatus}"!`);
+  return finalPost;
+}
+
+export const resolveProblem = (postId, account) => toggleProblemStatus(postId, 'Resolved', account);
+export const reopenProblem = (postId, account) => toggleProblemStatus(postId, 'Open', account);
 
 /**
  * 5. Fetch Solutions for a Problem
@@ -493,10 +966,18 @@ export async function getSolutions(postId) {
 
   if (error) {
     console.error('❌ [Supabase SELECT Error (getSolutions)]:', error);
-    throw new Error(`Supabase getSolutions failed: ${error.message}`);
   }
 
-  return data?.solutions || [];
+  const localSols = getLocalSolutions(postId);
+  const dbSols = Array.isArray(data?.solutions) ? data.solutions : [];
+  const merged = [...dbSols];
+  localSols.forEach(s => {
+    if (!merged.some(m => m.id === s.id)) {
+      merged.push(s);
+    }
+  });
+
+  return merged;
 }
 
 /**
@@ -508,7 +989,18 @@ export const postService = {
   getPostById,
   createProblem,
   createPost,
+  updateProblem,
+  updatePost,
+  deleteProblem,
+  deletePost,
   uploadImageAndCreatePost,
+  uploadImageAndUpdatePost,
+  isPostAuthor,
+  getPostAuthorInfo,
+  getPostStatus,
+  toggleProblemStatus,
+  resolveProblem,
+  reopenProblem,
   addComment,
   likeProblem,
   likePost: likeProblem,

@@ -382,7 +382,7 @@ export default function App() {
               {authMode === 'signup' && (
                 <div className="form-field-group">
                   <label className="field-label">Full Name</label>
-                  <input type="text" required placeholder="e.g. Citizen Account 1" value={name} onChange={(e) => setName(e.target.value)} className="field-input" />
+                  <input type="text" required placeholder="e.g. Jane Doe" value={name} onChange={(e) => setName(e.target.value)} className="field-input" />
                 </div>
               )}
               <div className="form-field-group">

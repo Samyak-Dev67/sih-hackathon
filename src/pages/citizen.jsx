@@ -61,16 +61,53 @@ function CitizenPage() {
   const handleDownvote = (postId) => handleVote(postId, 'down');
 
   const handleCreateProblem = async (problemData) => {
+    const dataWithAuthor = {
+      ...problemData,
+      author_id: account?.id,
+      author_name: account?.name,
+      author_email: account?.email
+    };
     let created;
     if (problemData.imageFile) {
-      created = await postService.uploadImageAndCreatePost(problemData.imageFile, problemData);
+      created = await postService.uploadImageAndCreatePost(problemData.imageFile, dataWithAuthor);
     } else {
-      created = await postService.createPost(problemData);
+      created = await postService.createPost(dataWithAuthor);
     }
     if (created) {
       setPosts(prev => [created, ...prev]);
       setSelectedPost(created);
     }
+  };
+
+  const handleUpdateProblem = async (postId, updatedFields) => {
+    let updated;
+    if (updatedFields.imageFile) {
+      updated = await postService.uploadImageAndUpdatePost(postId, updatedFields.imageFile, updatedFields);
+    } else {
+      updated = await postService.updatePost(postId, updatedFields);
+    }
+    if (updated) {
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated } : p));
+      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated } : prev));
+    }
+    return updated;
+  };
+
+  const handleDeleteProblem = async (postId) => {
+    await postService.deletePost(postId);
+    setPosts(prev => prev.filter(p => p.id !== postId));
+    if (selectedPost && selectedPost.id === postId) {
+      setSelectedPost(null);
+    }
+  };
+
+  const handleToggleResolve = async (postId, newStatus) => {
+    const updated = await postService.toggleProblemStatus(postId, newStatus, account);
+    if (updated) {
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, status: updated.status } : p));
+      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, status: updated.status } : prev));
+    }
+    return updated;
   };
 
   const handleSubmitSolution = async (postId, solData) => {
@@ -100,6 +137,9 @@ function CitizenPage() {
             onDownvote={handleDownvote}
             onSelectPost={(post) => setSelectedPost(post)}
             onSubmitProblem={handleCreateProblem}
+            onUpdateProblem={handleUpdateProblem}
+            onDeleteProblem={handleDeleteProblem}
+            onToggleResolve={handleToggleResolve}
           />
         </AuthGuard>
       </main>
@@ -111,6 +151,9 @@ function CitizenPage() {
           onVote={handleVote}
           onDownvote={handleDownvote}
           onSubmitSolution={handleSubmitSolution}
+          onUpdateProblem={handleUpdateProblem}
+          onDeleteProblem={handleDeleteProblem}
+          onToggleResolve={handleToggleResolve}
         />
       )}
     </div>
