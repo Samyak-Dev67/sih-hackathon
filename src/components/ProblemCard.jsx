@@ -21,14 +21,22 @@ export function ProblemCard({
     created_at,
     liked_by = [],
     downvoted_by = [],
-    solutions = []
+    solutions = [],
+    solution = [],
+    resolved = false
   } = post;
+
+  const postSolutions = Array.isArray(solutions) && solutions.length > 0
+    ? solutions
+    : Array.isArray(solution)
+      ? solution
+      : [];
 
   const accountObj = currentAccount || (currentAccountId ? { id: currentAccountId } : null);
   const isAuthor = isPostAuthor(post, accountObj);
   const authorInfo = getPostAuthorInfo(post, accountObj);
   const status = getPostStatus(post);
-  const isResolved = status === 'Resolved';
+  const isResolved = status === 'Resolved' || resolved === true || post.resolved === true;
 
   const hasLiked = liked_by.includes(accountObj?.id);
   const hasDownvoted = downvoted_by.includes(accountObj?.id);
@@ -176,16 +184,16 @@ export function ProblemCard({
         )}
 
         {/* Solutions section directly visible under the problem post */}
-        {solutions && solutions.length > 0 && (
+        {postSolutions && postSolutions.length > 0 && (
           <div className="card-solutions-preview-box">
             <div className="card-solutions-preview-header">
               <span className="card-solutions-pill">
-                💡 {solutions.length} {solutions.length === 1 ? 'Solution Submitted' : 'Solutions Submitted'}
+                💡 {postSolutions.length} {postSolutions.length === 1 ? 'Solution Submitted' : 'Solutions Submitted'}
               </span>
               <span className="card-solutions-view-hint">Click card to review details →</span>
             </div>
             <div className="card-solutions-mini-list">
-              {solutions.map((sol, sIdx) => (
+              {postSolutions.map((sol, sIdx) => (
                 <div key={sol.id || sIdx} className="card-solution-mini-item">
                   <div className="card-solution-mini-top">
                     <span className={`role-badge-tag ${sol.author_role === 'university' ? 'badge-uni' : 'badge-inds'}`}>

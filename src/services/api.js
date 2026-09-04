@@ -134,18 +134,18 @@ export async function getPosts() {
 
   console.log(`✅ [Supabase SELECT Success]: Retrieved ${data ? data.length : 0} posts from Supabase.`);
   const formatted = (data || []).map(post => {
-    const localSols = getLocalSolutions(post.id);
-    const postSols = Array.isArray(post.solutions) ? post.solutions : [];
-    const merged = [...postSols];
-    localSols.forEach(s => {
-      if (!merged.some(m => m.id === s.id)) {
-        merged.push(s);
-      }
-    });
+    const postSols = Array.isArray(post.solutions)
+      ? post.solutions
+      : Array.isArray(post.solution)
+        ? post.solution
+        : [];
+    const isResolved = post.resolved === true;
     return {
       ...post,
-      solutions: merged,
-      status: getPostStatus(post)
+      solutions: postSols,
+      solution: postSols,
+      resolved: isResolved,
+      status: isResolved ? 'Resolved' : 'Open'
     };
   });
   return formatted;
@@ -180,19 +180,19 @@ export async function getPostById(postId) {
 
   if (!data) return null;
 
-  const localSols = getLocalSolutions(data.id);
-  const postSols = Array.isArray(data.solutions) ? data.solutions : [];
-  const merged = [...postSols];
-  localSols.forEach(s => {
-    if (!merged.some(m => m.id === s.id)) {
-      merged.push(s);
-    }
-  });
+  const postSols = Array.isArray(data.solutions)
+    ? data.solutions
+    : Array.isArray(data.solution)
+      ? data.solution
+      : [];
+  const isResolved = data.resolved === true;
 
   return {
     ...data,
-    solutions: merged,
-    status: getPostStatus(data)
+    solutions: postSols,
+    solution: postSols,
+    resolved: isResolved,
+    status: isResolved ? 'Resolved' : 'Open'
   };
 }
 
@@ -243,57 +243,21 @@ export function isPostAuthor(post, currentAccount) {
 
 /**
  * Helper to get status of a post ('Resolved' or 'Open')
+ * Evaluates the `resolved` boolean column from Supabase directly.
  */
 export function getPostStatus(post) {
   if (!post) return 'Open';
-
-  // 1. Check local cache
-  try {
-    const raw = localStorage.getItem('fl_post_status_cache');
-    const cache = raw ? JSON.parse(raw) : {};
-    if (cache[post.id]) return cache[post.id];
-  } catch (e) {}
-
-  // 2. Check direct status field
+  // 1. Direct boolean column in Supabase
+  if (post.resolved === true) return 'Resolved';
+  if (post.resolved === false) return 'Open';
+  // 2. Direct string status field if present
   if (post.status === 'Resolved' || post.status === 'Open') return post.status;
-
-  // 3. Check __meta in comments JSON column
+  // 3. Fallback check for comments __meta
   if (Array.isArray(post.comments)) {
     const meta = post.comments.find(c => c && typeof c === 'object' && c.__meta);
-    if (meta?.status) return meta.status;
+    if (meta?.status === 'Resolved') return 'Resolved';
   }
-
   return 'Open';
-}
-
-function saveLocalPostStatus(postId, status) {
-  try {
-    const raw = localStorage.getItem('fl_post_status_cache');
-    const cache = raw ? JSON.parse(raw) : {};
-    cache[postId] = status;
-    localStorage.setItem('fl_post_status_cache', JSON.stringify(cache));
-  } catch (e) {}
-}
-
-function getLocalSolutions(postId) {
-  try {
-    const raw = localStorage.getItem('fl_solutions_cache');
-    const cache = raw ? JSON.parse(raw) : {};
-    return Array.isArray(cache[postId]) ? cache[postId] : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function saveLocalSolution(postId, solution) {
-  try {
-    const raw = localStorage.getItem('fl_solutions_cache');
-    const cache = raw ? JSON.parse(raw) : {};
-    const existing = Array.isArray(cache[postId]) ? cache[postId] : [];
-    const filtered = existing.filter(s => s.id !== solution.id);
-    cache[postId] = [solution, ...filtered];
-    localStorage.setItem('fl_solutions_cache', JSON.stringify(cache));
-  } catch (e) {}
 }
 
 /**
@@ -414,7 +378,8 @@ export async function createPost(postData = {}) {
     category: postData?.category ? postData.category.trim() : 'Infrastructure',
     score: typeof postData?.score === 'number' ? postData.score : 0,
     comments: commentsPayload,
-    solutions: Array.isArray(postData?.solutions) ? postData.solutions : []
+    solutions: Array.isArray(postData?.solutions) ? postData.solutions : [],
+    resolved: false
   };
 
   // If authorId is a valid UUID, include user_id
@@ -457,7 +422,7 @@ export const createProblem = createPost;
 
 /**
  * 2b. Update an existing Post in Supabase (Author Only)
- * Only updates valid columns in `posts` table: title, desc, category, img.
+ * Only updates valid columns in `posts` table: title, desc, category, img, resolved, solutions.
  */
 export async function updatePost(postId, updatedFields = {}) {
   if (!supabase) {
@@ -475,8 +440,10 @@ export async function updatePost(postId, updatedFields = {}) {
   if (typeof updatedFields.category === 'string') payload.category = updatedFields.category.trim();
   if (typeof updatedFields.img === 'string') payload.img = updatedFields.img.trim();
   if (typeof updatedFields.score === 'number') payload.score = updatedFields.score;
+  if (typeof updatedFields.resolved === 'boolean') payload.resolved = updatedFields.resolved;
   if (Array.isArray(updatedFields.comments)) payload.comments = updatedFields.comments;
   if (Array.isArray(updatedFields.solutions)) payload.solutions = updatedFields.solutions;
+  else if (Array.isArray(updatedFields.solution)) payload.solutions = updatedFields.solution;
 
   const { data, error } = await supabase
     .from('posts')
@@ -806,150 +773,170 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
 
   console.log(`📡 [Supabase UPDATE]: Submitting solution for post #${postId}...`, solutionPayload);
 
-  // 1. Save to local storage cache immediately so solution is never lost
-  saveLocalSolution(postId, solutionPayload);
+  // 1. Fetch current post from Supabase
+  const { data: post, error: fetchErr } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('id', postId)
+    .single();
 
-  // 2. Fetch existing solutions from Supabase
-  let existingSolutions = [];
-  let postRecord = null;
-  try {
-    const { data: post } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('id', postId)
-      .single();
-    if (post) {
-      postRecord = post;
-      if (Array.isArray(post.solutions)) {
-        existingSolutions = post.solutions;
-      }
-    }
-  } catch (e) {
-    console.warn('Could not fetch existing solutions:', e);
+  if (fetchErr) {
+    console.error('❌ [Supabase SELECT Error (submitSolution)]:', fetchErr);
+    throw new Error(`Failed to fetch post #${postId} before saving solution: ${fetchErr.message}`);
   }
+
+  const existingSolutions = Array.isArray(post.solutions)
+    ? post.solutions
+    : Array.isArray(post.solution)
+      ? post.solution
+      : [];
 
   const updatedSolutions = [
     solutionPayload,
     ...existingSolutions.filter(s => s.id !== solutionPayload.id)
   ];
 
-  // 3. Update solutions array in Supabase
-  let supabaseResult = null;
-  try {
-    const { data, error } = await supabase
-      .from('posts')
-      .update({ solutions: updatedSolutions })
-      .eq('id', postId)
-      .select();
+  // 2. Update solutions directly in Supabase
+  let updateResult = null;
+  let updateError = null;
 
-    if (error) {
-      console.error('❌ [Supabase UPDATE Error (submitSolution)]:', error);
-      if (error.code === '42501') {
-        console.warn('🚨 [RLS Warning]: RLS policy blocked updating solutions in Supabase. Solution cached locally.');
+  const { data: dataSolutions, error: errorSolutions } = await supabase
+    .from('posts')
+    .update({ solutions: updatedSolutions })
+    .eq('id', postId)
+    .select();
+
+  if (errorSolutions) {
+    // If backend column is named 'solution', fallback to 'solution'
+    if (errorSolutions.message?.includes('solution') || errorSolutions.code === 'PGRST204') {
+      console.log('🔄 Attempting fallback to "solution" column...');
+      const { data: dataSolution, error: errorSolution } = await supabase
+        .from('posts')
+        .update({ solution: updatedSolutions })
+        .eq('id', postId)
+        .select();
+
+      if (errorSolution) {
+        updateError = errorSolution;
+      } else {
+        updateResult = dataSolution;
       }
-    } else if (data && data.length > 0) {
-      supabaseResult = data[0];
+    } else {
+      updateError = errorSolutions;
     }
-  } catch (err) {
-    console.warn('Supabase update attempt failed:', err);
+  } else {
+    updateResult = dataSolutions;
   }
 
-  const finalPost = supabaseResult || {
-    ...(postRecord || {}),
-    id: postId,
+  if (updateError) {
+    console.error('❌ [Supabase UPDATE Error (submitSolution)]:', {
+      message: updateError.message,
+      code: updateError.code,
+      details: updateError.details,
+      hint: updateError.hint
+    });
+    if (updateError.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts.solutions".');
+      console.error('👉 Fix: Go to Supabase Dashboard > Authentication > Policies, and add an UPDATE policy allowing users to submit solutions.');
+    }
+    throw new Error(`Supabase failed to save solution: ${updateError.message} (code: ${updateError.code})`);
+  }
+
+  if (!updateResult || updateResult.length === 0) {
+    const rlsErr = new Error('Supabase UPDATE returned 0 rows. Row-Level Security (RLS) on the "posts" table may have blocked updating this problem.');
+    console.error('🚨 [Supabase RLS Error]:', rlsErr.message);
+    throw rlsErr;
+  }
+
+  const savedRecord = updateResult[0];
+  const isResolved = savedRecord.resolved === true;
+  const finalPost = {
+    ...savedRecord,
     solutions: updatedSolutions,
-    status: getPostStatus(postRecord)
+    solution: updatedSolutions,
+    resolved: isResolved,
+    status: isResolved ? 'Resolved' : 'Open'
   };
 
-  finalPost.solutions = updatedSolutions;
-  console.log('✅ [Solution Submitted Successfully]:', finalPost);
+  console.log(`✅ [Supabase UPDATE Success]: Solution saved to post #${postId} in Supabase:`, finalPost);
   return finalPost;
 }
 
 /**
  * 4b. Mark Problem as Resolved or Open (Citizen Author Only)
+ * Directly updates the `resolved` boolean column (true/false) in Supabase.
  */
 export async function toggleProblemStatus(postId, targetStatus, currentAccount) {
   if (!supabase) {
-    throw new Error('Supabase client is not initialized.');
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
   }
 
-  console.log(`📡 [Supabase UPDATE]: Toggling status for post #${postId}...`);
+  console.log(`📡 [Supabase SELECT]: Fetching problem #${postId} to check resolved boolean...`);
+  const { data: postRecord, error: fetchErr } = await supabase
+    .from('posts')
+    .select('id, resolved, title')
+    .eq('id', postId)
+    .single();
 
-  // 1. Fetch current post
-  let postRecord = null;
-  try {
-    const { data: post } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('id', postId)
-      .single();
-    postRecord = post;
-  } catch (e) {}
+  if (fetchErr) {
+    console.error('❌ [Supabase SELECT Error (toggleProblemStatus)]:', fetchErr);
+    throw new Error(`Failed to fetch problem #${postId}: ${fetchErr.message}`);
+  }
 
-  const currentStatus = getPostStatus(postRecord || { id: postId });
-  const newStatus = targetStatus || (currentStatus === 'Resolved' ? 'Open' : 'Resolved');
+  const currentlyResolved = postRecord?.resolved === true;
+  let newResolvedBool = !currentlyResolved;
+  if (targetStatus === 'Resolved' || targetStatus === true) {
+    newResolvedBool = true;
+  } else if (targetStatus === 'Open' || targetStatus === false) {
+    newResolvedBool = false;
+  }
 
-  // 2. Cache status locally immediately
-  saveLocalPostStatus(postId, newStatus);
+  console.log(`📡 [Supabase UPDATE]: Updating post #${postId} -> resolved: ${newResolvedBool}...`);
 
-  // 3. Update comments JSON with status metadata
-  const existingComments = Array.isArray(postRecord?.comments) ? [...postRecord.comments] : [];
-  const metaIdx = existingComments.findIndex(c => c && typeof c === 'object' && c.__meta);
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ resolved: newResolvedBool })
+    .eq('id', postId)
+    .select();
 
-  if (metaIdx >= 0) {
-    existingComments[metaIdx] = {
-      ...existingComments[metaIdx],
-      status: newStatus,
-      resolved_at: newStatus === 'Resolved' ? new Date().toISOString() : null,
-      resolved_by: currentAccount?.name || currentAccount?.id || 'Author'
-    };
-  } else {
-    existingComments.unshift({
-      __meta: true,
-      author_id: postRecord?.user_id || currentAccount?.id,
-      author_name: currentAccount?.name || 'Citizen User',
-      status: newStatus,
-      resolved_at: newStatus === 'Resolved' ? new Date().toISOString() : null,
-      resolved_by: currentAccount?.name || currentAccount?.id || 'Author'
+  if (error) {
+    console.error('❌ [Supabase UPDATE Error (toggleProblemStatus)]:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
     });
-  }
-
-  // 4. Update in Supabase
-  let updatedRecord = null;
-  try {
-    const { data, error } = await supabase
-      .from('posts')
-      .update({ comments: existingComments })
-      .eq('id', postId)
-      .select();
-
-    if (error) {
-      console.error('❌ [Supabase UPDATE Error (toggleProblemStatus)]:', error);
-    } else if (data && data.length > 0) {
-      updatedRecord = data[0];
+    if (error.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts.resolved" (code 42501).');
+      console.error('👉 Fix: Go to Supabase Dashboard > Authentication > Policies, and verify UPDATE policy on "posts".');
     }
-  } catch (err) {
-    console.warn('Supabase toggleProblemStatus failed:', err);
+    throw new Error(`Supabase UPDATE failed for resolved status: ${error.message} (code: ${error.code})`);
   }
 
-  const finalPost = {
-    ...(postRecord || {}),
-    ...(updatedRecord || {}),
-    id: postId,
-    comments: existingComments,
-    status: newStatus
-  };
+  if (!data || data.length === 0) {
+    const rlsErr = new Error('Supabase UPDATE returned 0 rows for resolved status. RLS may have blocked updating this problem.');
+    console.error('🚨 [Supabase RLS Error]:', rlsErr.message);
+    throw rlsErr;
+  }
 
-  console.log(`✅ [Problem Status]: Post #${postId} is now marked as "${newStatus}"!`);
-  return finalPost;
+  const updatedRecord = data[0];
+  const finalStatus = newResolvedBool ? 'Resolved' : 'Open';
+
+  console.log(`✅ [Supabase UPDATE Success]: Post #${postId} resolved is now ${newResolvedBool} ("${finalStatus}")`);
+  return {
+    ...updatedRecord,
+    resolved: newResolvedBool,
+    status: finalStatus
+  };
 }
 
 export const resolveProblem = (postId, account) => toggleProblemStatus(postId, 'Resolved', account);
 export const reopenProblem = (postId, account) => toggleProblemStatus(postId, 'Open', account);
 
 /**
- * 5. Fetch Solutions for a Problem
+ * 5. Fetch Solutions for a Problem directly from Supabase
  */
 export async function getSolutions(postId) {
   if (!supabase) {
@@ -960,24 +947,22 @@ export async function getSolutions(postId) {
 
   const { data, error } = await supabase
     .from('posts')
-    .select('solutions')
+    .select('*')
     .eq('id', postId)
     .single();
 
   if (error) {
     console.error('❌ [Supabase SELECT Error (getSolutions)]:', error);
+    throw new Error(`Supabase getSolutions failed: ${error.message}`);
   }
 
-  const localSols = getLocalSolutions(postId);
-  const dbSols = Array.isArray(data?.solutions) ? data.solutions : [];
-  const merged = [...dbSols];
-  localSols.forEach(s => {
-    if (!merged.some(m => m.id === s.id)) {
-      merged.push(s);
-    }
-  });
+  const dbSols = Array.isArray(data?.solutions)
+    ? data.solutions
+    : Array.isArray(data?.solution)
+      ? data.solution
+      : [];
 
-  return merged;
+  return dbSols;
 }
 
 /**

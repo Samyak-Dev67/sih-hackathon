@@ -40,7 +40,11 @@ export function ProblemDetailModal({
   // Status & Solutions state
   const [currentStatus, setCurrentStatus] = useState(() => getPostStatus(post));
   const [resolving, setResolving] = useState(false);
-  const [activeSolutions, setActiveSolutions] = useState(() => post.solutions || []);
+  const [activeSolutions, setActiveSolutions] = useState(() => {
+    if (Array.isArray(post.solutions)) return post.solutions;
+    if (Array.isArray(post.solution)) return post.solution;
+    return [];
+  });
 
   // Edit Problem state
   const [isEditing, setIsEditing] = useState(false);
@@ -71,7 +75,13 @@ export function ProblemDetailModal({
     setEditError('');
     setDeleteError('');
     setCurrentStatus(getPostStatus(post));
-    setActiveSolutions(Array.isArray(post.solutions) ? post.solutions : []);
+    setActiveSolutions(
+      Array.isArray(post.solutions)
+        ? post.solutions
+        : Array.isArray(post.solution)
+          ? post.solution
+          : []
+    );
   }, [post]);
 
   const handleImageChange = (e) => {
