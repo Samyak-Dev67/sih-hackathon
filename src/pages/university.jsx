@@ -108,6 +108,24 @@ function UniversityPage() {
     return updated;
   };
 
+  const handleAddComment = async (postId, commentData) => {
+    const updated = await postService.addComment(postId, commentData, account);
+    if (updated) {
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, comments: updated.comments } : p));
+      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, comments: updated.comments } : prev));
+    }
+    return updated;
+  };
+
+  const handleDeleteComment = async (postId, commentId) => {
+    const updated = await postService.deleteComment(postId, commentId, account);
+    if (updated) {
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, comments: updated.comments } : p));
+      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, comments: updated.comments } : prev));
+    }
+    return updated;
+  };
+
   return (
     <div className="app-shell">
       <Navbar 
@@ -139,6 +157,8 @@ function UniversityPage() {
           onDownvote={handleDownvote}
           onSubmitSolution={handleSubmitSolution}
           onDeleteSolution={handleDeleteSolution}
+          onAddComment={handleAddComment}
+          onDeleteComment={handleDeleteComment}
           onUpdateProblem={handleUpdateProblem}
           onDeleteProblem={handleDeleteProblem}
           onToggleResolve={handleToggleResolve}

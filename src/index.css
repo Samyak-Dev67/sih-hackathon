@@ -4582,5 +4582,83 @@ body {
   transform: none;
 }
 
+/* =========================================================
+   Modal Tab Navigation: Solutions vs Comments (Togglable)
+   ========================================================= */
+.modal-tab-nav-bar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 1.5rem;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
 
+.modal-tab-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.15rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
 
+.modal-tab-pill-btn:hover {
+  background: var(--bg-surface-hover, rgba(0, 0, 0, 0.04));
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.modal-tab-pill-btn.active {
+  background: var(--primary-color, #2563eb);
+  color: #ffffff;
+  border-color: var(--primary-color, #2563eb);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.28);
+}
+
+.modal-tab-pane {
+  padding: 1.25rem 1.5rem 2rem 1.5rem;
+  animation: fadeIn 0.18s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* =========================================================
+   Citizen Comments Section
+   ========================================================= */
+.citizen-comment-input-box {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.citizen-comment-input-box:focus-within {
+  border-color: var(--primary-color, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.comments-stream-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.comment-bubble-item {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.comment-bubble-item:hover {
+  border-color: var(--border-color-hover, #cbd5e1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}

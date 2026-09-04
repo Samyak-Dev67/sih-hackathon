@@ -1,5 +1,5 @@
 import React from 'react';
-import { isPostAuthor, getPostAuthorInfo, getPostStatus } from '../services/api';
+import { isPostAuthor, getPostAuthorInfo, getPostStatus, formatRelativeTime } from '../services/api';
 
 export function ProblemCard({ 
   post, 
@@ -23,6 +23,7 @@ export function ProblemCard({
     downvoted_by = [],
     solutions = [],
     solution = [],
+    comments = [],
     resolved = false
   } = post;
 
@@ -31,6 +32,10 @@ export function ProblemCard({
     : Array.isArray(solution)
       ? solution
       : [];
+
+  const validComments = (Array.isArray(comments) ? comments : []).filter(
+    c => c && typeof c === 'object' && !c.__meta && (c.text || c.comment)
+  );
 
   const accountObj = currentAccount || (currentAccountId ? { id: currentAccountId } : null);
   const isAuthor = isPostAuthor(post, accountObj);
@@ -41,19 +46,7 @@ export function ProblemCard({
   const hasLiked = liked_by.includes(accountObj?.id);
   const hasDownvoted = downvoted_by.includes(accountObj?.id);
 
-  // Format relative time
-  const getTimeAgo = (dateStr) => {
-    try {
-      const diffMs = Date.now() - new Date(dateStr).getTime();
-      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-      if (diffHours < 1) return 'Just now';
-      if (diffHours < 24) return `${diffHours} hours ago`;
-      const diffDays = Math.floor(diffHours / 24);
-      return `${diffDays} days ago`;
-    } catch (e) {
-      return 'Recent';
-    }
-  };
+  const getTimeAgo = (dateStr) => formatRelativeTime(dateStr);
 
   const handleCardDelete = async (e) => {
     e.stopPropagation();
@@ -201,7 +194,7 @@ export function ProblemCard({
                     </span>
                     <strong className="card-solution-mini-author">{sol.author_name}</strong>
                     {sol.created_at && (
-                      <span className="card-solution-mini-date">• {new Date(sol.created_at).toLocaleDateString()}</span>
+                      <span className="card-solution-mini-date">• {formatRelativeTime(sol.created_at)}</span>
                     )}
                   </div>
                   <h4 className="card-solution-mini-title">{sol.title}</h4>
@@ -220,14 +213,20 @@ export function ProblemCard({
             {isResolved && <span className="tag-pill resolved-tag">Resolved by Citizen</span>}
           </div>
 
-          {/* Solutions indicator */}
-          <div className="solutions-indicator">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <span className="solutions-count-text">
-              {solutions.length} {solutions.length === 1 ? 'Solution' : 'Solutions'}
-            </span>
+          {/* Solutions & Comments indicators */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div className="solutions-indicator" title="Submitted solutions">
+              <span>💡</span>
+              <span className="solutions-count-text">
+                {postSolutions.length} {postSolutions.length === 1 ? 'Solution' : 'Solutions'}
+              </span>
+            </div>
+            <div className="solutions-indicator" title="Citizen comments">
+              <span>💬</span>
+              <span className="solutions-count-text">
+                {validComments.length} {validComments.length === 1 ? 'Comment' : 'Comments'}
+              </span>
+            </div>
           </div>
         </div>
       </div>

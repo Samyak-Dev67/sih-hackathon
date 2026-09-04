@@ -271,6 +271,72 @@ export function isSolutionAuthor(solution, currentAccount) {
 }
 
 /**
+ * Check if the currently authenticated or active account is the author of a comment.
+ */
+export function isCommentAuthor(comment, currentAccount) {
+  if (!comment || !currentAccount) return false;
+
+  // 1. Direct author_id match
+  if (comment.author_id && currentAccount.id && comment.author_id === currentAccount.id) {
+    return true;
+  }
+
+  // 2. Direct author_email match
+  if (comment.author_email && currentAccount.email && comment.author_email.toLowerCase() === currentAccount.email.toLowerCase()) {
+    return true;
+  }
+
+  // 3. Match author_name with active user name
+  if (comment.author_name && currentAccount.name && comment.author_name.trim().toLowerCase() === currentAccount.name.trim().toLowerCase()) {
+    return true;
+  }
+
+  // 4. Match author_name with email prefix
+  if (comment.author_name && currentAccount.email && comment.author_name.trim().toLowerCase() === currentAccount.email.split('@')[0].trim().toLowerCase()) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Format timestamp into human-readable relative time (e.g., "12s ago", "5m ago", "2h ago", "3d ago").
+ */
+export function formatRelativeTime(dateStr) {
+  if (!dateStr) return 'Recently';
+  try {
+    const timeMs = new Date(dateStr).getTime();
+    if (isNaN(timeMs)) return 'Recently';
+
+    const diffMs = Date.now() - timeMs;
+    const diffSec = Math.floor(diffMs / 1000);
+
+    if (diffSec < 10) return 'Just now';
+    if (diffSec < 60) return `${diffSec}s ago`;
+
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+
+    const diffHrs = Math.floor(diffMin / 60);
+    if (diffHrs < 24) return `${diffHrs}h ago`;
+
+    const diffDays = Math.floor(diffHrs / 24);
+    if (diffDays < 7) return `${diffDays}d ago`;
+
+    const diffWeeks = Math.floor(diffDays / 7);
+    if (diffWeeks < 5) return `${diffWeeks}w ago`;
+
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths < 12) return `${diffMonths}mo ago`;
+
+    const diffYears = Math.floor(diffDays / 365);
+    return `${diffYears}y ago`;
+  } catch (e) {
+    return 'Recently';
+  }
+}
+
+/**
  * Helper to get status of a post ('Resolved' or 'Open')
  * Evaluates the `resolved` boolean column from Supabase directly.
  */
@@ -627,31 +693,56 @@ export async function uploadImageAndUpdatePost(postId, file, updatedFields = {})
 }
 
 /**
- * Add a Comment to a Post in Supabase
+ * Add a Comment to a Post in Supabase (Citizen Only)
  */
-export async function addComment(postId, newComment) {
+export async function addComment(postId, commentData, currentAccount) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
     console.error('❌ [Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  console.log(`📡 [Supabase UPDATE]: Adding comment to post #${postId}...`);
-  // 1. Fetch existing comments
+  // Validate citizen role
+  const role = currentAccount?.role || commentData?.author_role;
+  if (role && role !== 'citizen') {
+    throw new Error('Only citizen accounts are authorized to post comments.');
+  }
+
+  const commentText = typeof commentData === 'string' ? commentData : commentData?.text || commentData?.comment;
+  if (!commentText || !commentText.trim()) {
+    throw new Error('Comment text cannot be empty.');
+  }
+
+  const authorDisplayName = currentAccount?.name || (currentAccount?.email ? currentAccount.email.split('@')[0] : commentData?.author_name || 'Citizen Member');
+
+  const commentPayload = {
+    id: `comment-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    author_id: currentAccount?.id || commentData?.author_id || null,
+    author_email: currentAccount?.email || commentData?.author_email || null,
+    author_name: authorDisplayName,
+    author_role: 'citizen',
+    text: commentText.trim(),
+    created_at: new Date().toISOString()
+  };
+
+  console.log(`📡 [Supabase UPDATE]: Adding citizen comment to post #${postId}...`, commentPayload);
+
+  // 1. Fetch current post
   const { data: post, error: fetchError } = await supabase
     .from('posts')
-    .select('comments')
+    .select('*')
     .eq('id', postId)
     .single();
 
   if (fetchError) {
     console.error('❌ [Supabase SELECT Error (addComment)]:', fetchError);
-    throw new Error(`Supabase failed to fetch existing comments: ${fetchError.message}`);
+    throw new Error(`Failed to fetch post #${postId}: ${fetchError.message}`);
   }
 
-  const updatedComments = [...(post.comments || []), newComment];
+  const existingComments = Array.isArray(post.comments) ? post.comments : [];
+  const updatedComments = [...existingComments, commentPayload];
 
-  // 2. Update with the new array
+  // 2. Update comments in Supabase
   const { data, error } = await supabase
     .from('posts')
     .update({ comments: updatedComments })
@@ -661,13 +752,63 @@ export async function addComment(postId, newComment) {
   if (error) {
     console.error('❌ [Supabase UPDATE Error (addComment)]:', error);
     if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501).');
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts.comments".');
     }
-    throw new Error(`Supabase update comments failed: ${error.message}`);
+    throw new Error(`Supabase failed to add comment: ${error.message} (code: ${error.code})`);
   }
 
-  console.log('✅ [Supabase UPDATE Success]: Comments updated on post #', postId);
-  return data && data.length > 0 ? data[0] : null;
+  const updatedRecord = data && data.length > 0 ? data[0] : { ...post, comments: updatedComments };
+  console.log(`✅ [Supabase UPDATE Success]: Comment added to post #${postId}:`, updatedRecord);
+  return updatedRecord;
+}
+
+/**
+ * Delete a Comment from a Post in Supabase (Comment Author Only)
+ */
+export async function deleteComment(postId, commentId, currentAccount) {
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
+  }
+
+  console.log(`📡 [Supabase UPDATE]: Deleting comment #${commentId} from post #${postId}...`);
+
+  const { data: post, error: fetchError } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('id', postId)
+    .single();
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch post #${postId}: ${fetchError.message}`);
+  }
+
+  const existingComments = Array.isArray(post.comments) ? post.comments : [];
+  const targetComment = existingComments.find(c => c && c.id === commentId);
+
+  if (!targetComment) {
+    console.warn(`⚠️ Comment #${commentId} not found in post #${postId}`);
+    return post;
+  }
+
+  if (currentAccount && !isCommentAuthor(targetComment, currentAccount)) {
+    throw new Error('Unauthorized: You can only delete comments that you posted.');
+  }
+
+  const updatedComments = existingComments.filter(c => c && c.id !== commentId);
+
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ comments: updatedComments })
+    .eq('id', postId)
+    .select();
+
+  if (error) {
+    throw new Error(`Supabase failed to delete comment: ${error.message}`);
+  }
+
+  return data && data.length > 0 ? data[0] : { ...post, comments: updatedComments };
 }
 
 /**
@@ -1126,9 +1267,10 @@ export const postService = {
   getPostAuthorInfo,
   getPostStatus,
   toggleProblemStatus,
-  resolveProblem,
-  reopenProblem,
   addComment,
+  deleteComment,
+  isCommentAuthor,
+  formatRelativeTime,
   likeProblem,
   likePost: likeProblem,
   downvoteProblem,

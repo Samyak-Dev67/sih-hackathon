@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { CATEGORIES } from '../data/mockData';
-import { isPostAuthor, getPostAuthorInfo, getPostStatus, isSolutionAuthor, postService } from '../services/api';
+import { 
+  isPostAuthor, 
+  getPostAuthorInfo, 
+  getPostStatus, 
+  isSolutionAuthor, 
+  isCommentAuthor,
+  formatRelativeTime,
+  postService 
+} from '../services/api';
 
 export function ProblemDetailModal({ 
   post, 
@@ -10,6 +18,8 @@ export function ProblemDetailModal({
   onDownvote,
   onSubmitSolution,
   onDeleteSolution,
+  onAddComment,
+  onDeleteComment,
   onUpdateProblem,
   onDeleteProblem,
   onToggleResolve
@@ -47,6 +57,18 @@ export function ProblemDetailModal({
     return [];
   });
 
+  // Tab & Comments state
+  const [activeTab, setActiveTab] = useState('solutions'); // 'solutions' | 'comments'
+  const [activeComments, setActiveComments] = useState(() => {
+    return (Array.isArray(post.comments) ? post.comments : []).filter(
+      c => c && typeof c === 'object' && !c.__meta && (c.text || c.comment)
+    );
+  });
+  const [commentText, setCommentText] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [commentFeedback, setCommentFeedback] = useState('');
+  const [deletingCommentId, setDeletingCommentId] = useState(null);
+
   // Edit Problem state
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(title || '');
@@ -82,6 +104,11 @@ export function ProblemDetailModal({
         : Array.isArray(post.solution)
           ? post.solution
           : []
+    );
+    setActiveComments(
+      (Array.isArray(post.comments) ? post.comments : []).filter(
+        c => c && typeof c === 'object' && !c.__meta && (c.text || c.comment)
+      )
     );
   }, [post]);
 
@@ -243,6 +270,70 @@ export function ProblemDetailModal({
     }
   };
 
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    if (!commentText.trim()) return;
+
+    if (userRole !== 'citizen') {
+      setCommentFeedback('Only verified citizens are authorized to post comments.');
+      return;
+    }
+
+    setSubmittingComment(true);
+    setCommentFeedback('');
+    try {
+      const authorDisplayName = currentAccount?.name || (currentAccount?.email ? currentAccount.email.split('@')[0] : 'Citizen Member');
+      const commentPayload = {
+        id: `comment-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        author_id: currentAccount?.id || null,
+        author_email: currentAccount?.email || null,
+        author_name: authorDisplayName,
+        author_role: 'citizen',
+        text: commentText.trim(),
+        created_at: new Date().toISOString()
+      };
+
+      if (onAddComment) {
+        await onAddComment(id, commentPayload);
+      } else {
+        await postService.addComment(id, commentPayload, currentAccount);
+      }
+
+      setActiveComments(prev => [...prev, commentPayload]);
+      setCommentText('');
+      setCommentFeedback('✅ Comment posted successfully!');
+      setTimeout(() => setCommentFeedback(''), 4000);
+    } catch (err) {
+      console.error('Failed to post comment:', err);
+      setCommentFeedback(`❌ ${err.message || 'Failed to post comment.'}`);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId) => {
+    if (!window.confirm('Are you sure you want to delete your comment? This cannot be undone.')) {
+      return;
+    }
+
+    setDeletingCommentId(commentId);
+    try {
+      if (onDeleteComment) {
+        await onDeleteComment(id, commentId);
+      } else {
+        await postService.deleteComment(id, commentId, currentAccount);
+      }
+      setActiveComments(prev => prev.filter(c => c.id !== commentId));
+      setCommentFeedback('✅ Comment deleted.');
+      setTimeout(() => setCommentFeedback(''), 3000);
+    } catch (err) {
+      console.error('Failed to delete comment:', err);
+      alert(err.message || 'Failed to delete comment.');
+    } finally {
+      setDeletingCommentId(null);
+    }
+  };
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-container detail-modal-card" onClick={(e) => e.stopPropagation()}>
@@ -277,8 +368,8 @@ export function ProblemDetailModal({
                     <span className="detail-author-role">(CITIZEN)</span>
                     {isAuthor && <span className="author-badge-you">Your Post</span>}
                   </div>
-                  <span className="detail-date">
-                    • {new Date(created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                  <span className="detail-date" title={new Date(created_at).toLocaleString()}>
+                    • {formatRelativeTime(created_at)} ({new Date(created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })})
                   </span>
                 </div>
               </div>
@@ -529,7 +620,10 @@ export function ProblemDetailModal({
                 <button 
                   type="button" 
                   className="btn btn-blue"
-                  onClick={() => setShowSolutionForm(true)}
+                  onClick={() => {
+                    setActiveTab('solutions');
+                    setShowSolutionForm(true);
+                  }}
                 >
                   + Submit a Solution
                 </button>
@@ -543,137 +637,280 @@ export function ProblemDetailModal({
             </div>
           )}
 
-          {/* Solution Submission Form (University & Industry ONLY) */}
-          {canSubmitSolution && showSolutionForm && (
-            <div className="submit-solution-box">
-              <div className="solution-form-header">
-                <h3>Submit a Solution</h3>
-                <p>Provide a structured technical proposal for this citizen problem.</p>
+          {/* Section Navigation Tabs: Solutions vs Comments (Togglable) */}
+          <div className="modal-tab-nav-bar">
+            <button
+              type="button"
+              className={`modal-tab-pill-btn ${activeTab === 'solutions' ? 'active' : ''}`}
+              onClick={() => setActiveTab('solutions')}
+            >
+              💡 Solutions ({activeSolutions.length})
+            </button>
+            <button
+              type="button"
+              className={`modal-tab-pill-btn ${activeTab === 'comments' ? 'active' : ''}`}
+              onClick={() => setActiveTab('comments')}
+            >
+              💬 Comments ({activeComments.length})
+            </button>
+          </div>
+
+          {/* ===================== TAB 1: SOLUTIONS ===================== */}
+          {activeTab === 'solutions' && (
+            <div className="modal-tab-pane">
+              {/* Solution Submission Form (University & Industry ONLY) */}
+              {canSubmitSolution && showSolutionForm && (
+                <div className="submit-solution-box">
+                  <div className="solution-form-header">
+                    <h3>Submit a Solution</h3>
+                    <p>Provide a structured technical proposal for this citizen problem.</p>
+                  </div>
+
+                  <form onSubmit={handleSolutionSubmit} className="solution-form">
+                    <div className="form-field-group">
+                      <label className="field-label">Solution Title *</label>
+                      <input 
+                        type="text"
+                        required
+                        className="field-input"
+                        placeholder="Enter a descriptive solution title..."
+                        value={solTitle}
+                        onChange={(e) => setSolTitle(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-field-group">
+                      <label className="field-label">Proposed Approach & Technical Details *</label>
+                      <textarea 
+                        rows={4}
+                        required
+                        className="field-textarea"
+                        placeholder="Describe how your institution or enterprise proposes to solve this problem..."
+                        value={solApproach}
+                        onChange={(e) => setSolApproach(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-actions-row">
+                      <button 
+                        type="button" 
+                        className="btn btn-outline"
+                        onClick={() => setShowSolutionForm(false)}
+                        disabled={submitting}
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        type="submit" 
+                        className="btn btn-blue"
+                        disabled={submitting}
+                      >
+                        {submitting ? 'Submitting...' : 'Post Solution'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Solutions Feed Header */}
+              <div className="solutions-section-header">
+                <div className="solutions-header-left">
+                  <h3>Solutions ({activeSolutions.length})</h3>
+                </div>
+                <span className="solutions-header-note">
+                  Submitted by verified Universities & Industries
+                </span>
               </div>
 
-              <form onSubmit={handleSolutionSubmit} className="solution-form">
-                <div className="form-field-group">
-                  <label className="field-label">Solution Title *</label>
-                  <input 
-                    type="text"
-                    required
-                    className="field-input"
-                    placeholder="Enter a descriptive solution title..."
-                    value={solTitle}
-                    onChange={(e) => setSolTitle(e.target.value)}
-                  />
-                </div>
+              {/* Solutions List */}
+              <div className="solutions-list">
+                {solDeleteError && (
+                  <div className="status-box error" style={{ margin: '0.75rem 0' }}>
+                    {solDeleteError}
+                  </div>
+                )}
 
-                <div className="form-field-group">
-                  <label className="field-label">Proposed Approach & Technical Details *</label>
-                  <textarea 
-                    rows={4}
-                    required
-                    className="field-textarea"
-                    placeholder="Describe how your institution or enterprise proposes to solve this problem..."
-                    value={solApproach}
-                    onChange={(e) => setSolApproach(e.target.value)}
-                  />
-                </div>
+                {activeSolutions.length === 0 ? (
+                  <div className="empty-solutions-card">
+                    <p>No solutions submitted yet.</p>
+                    {canSubmitSolution ? (
+                      <span className="empty-subtext">Click "+ Submit a Solution" above to post the first solution.</span>
+                    ) : (
+                      <span className="empty-subtext">Universities and industries will post structured solutions here.</span>
+                    )}
+                  </div>
+                ) : (
+                  activeSolutions.map((sol, index) => {
+                    const isSolAuthor = isSolutionAuthor(sol, currentAccount);
+                    return (
+                      <div key={sol.id || index} className="solution-item-card">
+                        <div className="solution-card-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div className="solution-org-info" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <span className={`role-badge-tag ${sol.author_role === 'university' ? 'badge-uni' : 'badge-inds'}`}>
+                              {(sol.author_role || 'PARTNER').toUpperCase()}
+                            </span>
+                            <strong className="solution-org-title">{sol.author_name}</strong>
+                            {isSolAuthor && <span className="author-badge-you">Your Solution</span>}
+                          </div>
 
-                <div className="form-actions-row">
-                  <button 
-                    type="button" 
-                    className="btn btn-outline"
-                    onClick={() => setShowSolutionForm(false)}
-                    disabled={submitting}
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit" 
-                    className="btn btn-blue"
-                    disabled={submitting}
-                  >
-                    {submitting ? 'Submitting...' : 'Post Solution'}
-                  </button>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            {sol.created_at && (
+                              <span className="solution-date-text">
+                                {formatRelativeTime(sol.created_at)}
+                              </span>
+                            )}
+                            {isSolAuthor && (
+                              <button
+                                type="button"
+                                className="btn-delete-sol-item"
+                                onClick={() => handleDeleteSolution(sol.id)}
+                                disabled={deletingSolId === sol.id}
+                                title="Delete your solution"
+                              >
+                                {deletingSolId === sol.id ? 'Deleting...' : '🗑️ Delete'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <h4 className="solution-title">{sol.title}</h4>
+                        <div className="solution-description-text">
+                          {sol.proposed_approach || sol.desc}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Citizen info notice */}
+              {userRole === 'citizen' && (
+                <div className="citizen-transparency-box" style={{ marginTop: '1.25rem' }}>
+                  <div className="transparency-icon">💡</div>
+                  <div className="transparency-text">
+                    <strong>Solutions Showcase:</strong> Solutions are proposed by registered universities and enterprise partners. Citizens can discuss this problem under the <strong>💬 Comments</strong> tab.
+                  </div>
                 </div>
-              </form>
+              )}
             </div>
           )}
 
-          {/* Solutions Feed Header */}
-          <div className="solutions-section-header">
-            <div className="solutions-header-left">
-              <h3>Solutions ({activeSolutions.length})</h3>
-            </div>
-            <span className="solutions-header-note">
-              Submitted by verified Universities & Industries
-            </span>
-          </div>
-
-          {/* Solutions List */}
-          <div className="solutions-list">
-            {solDeleteError && (
-              <div className="status-box error" style={{ margin: '0.75rem 0' }}>
-                {solDeleteError}
+          {/* ===================== TAB 2: COMMENTS ===================== */}
+          {activeTab === 'comments' && (
+            <div className="modal-tab-pane">
+              <div className="solutions-section-header">
+                <div className="solutions-header-left">
+                  <h3>Citizen Comments ({activeComments.length})</h3>
+                </div>
+                <span className="solutions-header-note">
+                  Civic discussion by verified community citizens
+                </span>
               </div>
-            )}
 
-            {activeSolutions.length === 0 ? (
-              <div className="empty-solutions-card">
-                <p>No solutions submitted yet.</p>
-                {canSubmitSolution ? (
-                  <span className="empty-subtext">Click "+ Submit a Solution" above to post the first solution.</span>
-                ) : (
-                  <span className="empty-subtext">Universities and industries will post structured solutions here.</span>
-                )}
-              </div>
-            ) : (
-              activeSolutions.map((sol, index) => {
-                const isSolAuthor = isSolutionAuthor(sol, currentAccount);
-                return (
-                  <div key={sol.id || index} className="solution-item-card">
-                    <div className="solution-card-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div className="solution-org-info" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                        <span className={`role-badge-tag ${sol.author_role === 'university' ? 'badge-uni' : 'badge-inds'}`}>
-                          {(sol.author_role || 'PARTNER').toUpperCase()}
-                        </span>
-                        <strong className="solution-org-title">{sol.author_name}</strong>
-                        {isSolAuthor && <span className="author-badge-you">Your Solution</span>}
-                      </div>
+              {commentFeedback && (
+                <div className={`status-box ${commentFeedback.startsWith('✅') ? 'success' : 'error'}`} style={{ margin: '0.75rem 0' }}>
+                  {commentFeedback}
+                </div>
+              )}
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                        {sol.created_at && (
-                          <span className="solution-date-text">
-                            {new Date(sol.created_at).toLocaleDateString()}
-                          </span>
-                        )}
-                        {isSolAuthor && (
-                          <button
-                            type="button"
-                            className="btn-delete-sol-item"
-                            onClick={() => handleDeleteSolution(sol.id)}
-                            disabled={deletingSolId === sol.id}
-                            title="Delete your solution"
-                          >
-                            {deletingSolId === sol.id ? 'Deleting...' : '🗑️ Delete'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <h4 className="solution-title">{sol.title}</h4>
-                    <div className="solution-description-text">
-                      {sol.proposed_approach || sol.desc}
-                    </div>
+              {/* Comment Post Form (ONLY Citizens can post) */}
+              {userRole === 'citizen' ? (
+                <form onSubmit={handleCommentSubmit} className="citizen-comment-input-box" style={{ margin: '1rem 0 1.5rem 0' }}>
+                  <textarea
+                    rows={3}
+                    required
+                    className="field-textarea"
+                    placeholder="Share your perspective or additional details about this issue..."
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                      Posting as: <strong>{currentAccount?.name || 'Citizen'}</strong> <span className="role-badge-tag badge-citz">CITIZEN</span>
+                    </span>
+                    <button
+                      type="submit"
+                      className="btn btn-blue"
+                      disabled={submittingComment || !commentText.trim()}
+                    >
+                      {submittingComment ? 'Posting...' : '💬 Post Comment'}
+                    </button>
                   </div>
-                );
-              })
-            )}
-          </div>
+                </form>
+              ) : (
+                <div className="citizen-transparency-box" style={{ margin: '1rem 0' }}>
+                  <div className="transparency-icon">ℹ️</div>
+                  <div className="transparency-text">
+                    <strong>Citizen Only Discussion:</strong> Only verified citizen accounts are authorized to post comments on citizen problems. As a {userRole === 'university' ? 'University Partner' : 'Industry Partner'}, you can submit structured proposals under the <strong>💡 Solutions</strong> tab.
+                  </div>
+                </div>
+              )}
 
-          {/* Citizen Notice - strictly NO comment box */}
-          {userRole === 'citizen' && (
-            <div className="citizen-transparency-box">
-              <div className="transparency-icon">ℹ️</div>
-              <div className="transparency-text">
-                <strong>Civic Transparency Notice:</strong> Solutions from universities and industries are displayed above for community visibility. Citizens cannot comment or submit solutions on this platform.
+              {/* Comments List */}
+              <div className="comments-stream-list">
+                {activeComments.length === 0 ? (
+                  <div className="empty-solutions-card">
+                    <p>No comments yet.</p>
+                    {userRole === 'citizen' ? (
+                      <span className="empty-subtext">Be the first citizen to comment on this problem!</span>
+                    ) : (
+                      <span className="empty-subtext">Citizen community discussions will appear here.</span>
+                    )}
+                  </div>
+                ) : (
+                  activeComments.map((c, idx) => {
+                    const isMyComment = isCommentAuthor(c, currentAccount);
+                    const cInitials = (c.author_name || 'C')
+                      .split(' ')
+                      .filter(Boolean)
+                      .map(w => w[0])
+                      .join('')
+                      .substring(0, 2)
+                      .toUpperCase() || 'C';
+
+                    return (
+                      <div key={c.id || idx} className="comment-bubble-item" style={{
+                        padding: '1rem',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        marginBottom: '0.85rem'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <div className="author-avatar-circle" style={{ width: '28px', height: '28px', fontSize: '0.75rem' }}>
+                              {cInitials}
+                            </div>
+                            <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>{c.author_name}</strong>
+                            <span className="role-badge-tag badge-citz">CITIZEN</span>
+                            {isMyComment && <span className="author-badge-you">Your Comment</span>}
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                              {formatRelativeTime(c.created_at)}
+                            </span>
+                            {isMyComment && (
+                              <button
+                                type="button"
+                                className="btn-delete-sol-item"
+                                onClick={() => handleDeleteComment(c.id)}
+                                disabled={deletingCommentId === c.id}
+                                title="Delete your comment"
+                              >
+                                {deletingCommentId === c.id ? 'Deleting...' : '🗑️ Delete'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.45', whiteSpace: 'pre-wrap' }}>
+                          {c.text || c.comment}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           )}
