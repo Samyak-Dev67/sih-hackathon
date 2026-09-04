@@ -2,12 +2,13 @@ import React, { useState } from 'react';
 import { ProblemCard } from './ProblemCard';
 import { SubmitProblemForm } from './SubmitProblemForm';
 import { CATEGORIES } from '../data/mockData';
+import { filterProblems } from '../utils/search';
 
 export function CitizenDashboard({ 
   currentAccount, 
   posts = [], 
   onVote, 
-  onDownvote,
+  onDownvote, 
   onSelectPost, 
   onSubmitProblem,
   onUpdateProblem,
@@ -18,17 +19,9 @@ export function CitizenDashboard({
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredPosts = posts.filter(post => {
-    if (selectedCategory !== 'All' && (post.category || '').toLowerCase() !== selectedCategory.toLowerCase()) {
-      return false;
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const matchTitle = (post.title || '').toLowerCase().includes(q);
-      const matchDesc = (post.desc || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchDesc) return false;
-    }
-    return true;
+  const filteredPosts = filterProblems(posts, {
+    query: searchQuery,
+    category: selectedCategory
   });
 
   return (
@@ -122,11 +115,21 @@ export function CitizenDashboard({
               <div className="feed-search-box">
                 <input 
                   type="text"
-                  placeholder="Search problems by keywords..."
+                  placeholder="Search by keyword, ID (#), or category..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="feed-search-input"
                 />
+                {searchQuery && (
+                  <button 
+                    type="button" 
+                    className="feed-search-clear-btn" 
+                    onClick={() => setSearchQuery('')}
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             </div>
 
@@ -134,14 +137,30 @@ export function CitizenDashboard({
             <div className="problems-feed-stream">
               {filteredPosts.length === 0 ? (
                 <div className="empty-feed-card">
-                  <h3>No problems found</h3>
-                  <p>Be the first citizen to post a problem for university and industry teams.</p>
-                  <button 
-                    className="btn btn-blue"
-                    onClick={() => setShowSubmitView(true)}
-                  >
-                    Post a Problem
-                  </button>
+                  {searchQuery || selectedCategory !== 'All' ? (
+                    <>
+                      <h3>No problems found</h3>
+                      <p>No issues match your current filters {searchQuery ? `("${searchQuery}")` : ''}.</p>
+                      <button 
+                        className="btn btn-outline"
+                        onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}
+                        style={{ marginTop: '0.5rem' }}
+                      >
+                        Reset Search Filters
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <h3>No problems found</h3>
+                      <p>Be the first citizen to post a problem for university and industry teams.</p>
+                      <button 
+                        className="btn btn-blue"
+                        onClick={() => setShowSubmitView(true)}
+                      >
+                        Post a Problem
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : (
                 filteredPosts.map((post) => (

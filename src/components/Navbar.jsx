@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { DarkModeToggle } from './DarkModeToggle';
 
 export function Navbar({ 
@@ -7,9 +7,18 @@ export function Navbar({
   theme,
   onToggleTheme,
   onOpenAuth,
-  onLogout
+  onLogout,
+  searchQuery = '',
+  onSearchChange
 }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [internalQuery, setInternalQuery] = useState('');
+  const currentQuery = onSearchChange ? searchQuery : internalQuery;
+
+  const handleQueryChange = (val) => {
+    if (onSearchChange) onSearchChange(val);
+    else setInternalQuery(val);
+  };
 
   const getRoleBadge = (role) => {
     switch ((role || '').toLowerCase()) {
@@ -36,7 +45,40 @@ export function Navbar({
           </div>
         </a>
 
-        {/* Center Navigation Links - ONLY relevant pages! */}
+        {/* Global Search Bar (Accessible to ANYBODY) */}
+        <div className="navbar-search-bar">
+          <span className="navbar-search-icon">🔍</span>
+          <input 
+            type="text"
+            placeholder="Search problems by keyword, ID (#), or category..."
+            value={currentQuery}
+            onChange={(e) => handleQueryChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (activePage === 'landing') {
+                  const el = document.getElementById('search-problems');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                  window.location.href = `/?search=${encodeURIComponent(currentQuery || e.target.value)}#search-problems`;
+                }
+              }
+            }}
+            className="navbar-search-input"
+          />
+          {currentQuery && (
+            <button 
+              type="button" 
+              className="navbar-search-clear"
+              onClick={() => handleQueryChange('')}
+              title="Clear search"
+              aria-label="Clear search"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
+        {/* Center Navigation Links */}
         <nav className="navbar-nav-links">
           <a 
             href="/" 
@@ -44,6 +86,21 @@ export function Navbar({
             style={{ textDecoration: 'none' }}
           >
             Home / Info
+          </a>
+
+          <a 
+            href={activePage === 'landing' ? '#search-problems' : '/#search-problems'} 
+            className="nav-link-btn"
+            style={{ textDecoration: 'none' }}
+            onClick={(e) => {
+              if (activePage === 'landing') {
+                e.preventDefault();
+                const el = document.getElementById('search-problems');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }
+            }}
+          >
+            Search Problems
           </a>
 
           {/* Show ONLY the logged-in user's relevant dashboard */}

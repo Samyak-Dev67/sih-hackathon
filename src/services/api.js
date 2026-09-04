@@ -1,5 +1,6 @@
 import { INITIAL_POSTS } from '../data/mockData.js';
 import { supabase } from '../utils/supabase.js';
+import { filterProblems } from '../utils/search.js';
 
 /**
  * ==============================================================================
@@ -1277,8 +1278,10 @@ export const postService = {
   submitSolution,
   deleteSolution,
   getSolutions,
-  isSolutionAuthor
+  isSolutionAuthor,
+  filterProblems
 };
 
+export { filterProblems };
 export const api = postService;
 export default postService;

@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './utils/supabase';
-import { DEMO_ACCOUNTS } from './data/mockData';
+import { DEMO_ACCOUNTS, CATEGORIES } from './data/mockData';
 import { Navbar } from './components/Navbar';
+import { ProblemCard } from './components/ProblemCard';
+import { ProblemDetailModal } from './components/ProblemDetailModal';
+import { postService, filterProblems } from './services/api';
 
 /* ── Scroll-reveal hook ─────────────────────────────────────── */
 function useScrollReveal() {
@@ -129,6 +132,78 @@ export default function App() {
     setStatusMsg({ type: '', text: '' }); setIsAuthOpen(true);
   };
 
+  /* ── Public Problem Search & Explorer State (Accessible to ANYBODY) ── */
+  const [posts, setPosts] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [postsError, setPostsError] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('search') || p.get('q') || '';
+  });
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All'); // 'All' | 'Open' | 'Resolved'
+  const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'score' | 'solutions' | 'comments'
+  const [selectedPost, setSelectedPost] = useState(null);
+
+  // Fetch live problems from Supabase for all visitors
+  useEffect(() => {
+    async function loadPublicProblems() {
+      setLoadingPosts(true);
+      setPostsError('');
+      try {
+        const data = await postService.getPosts();
+        setPosts(data || []);
+      } catch (err) {
+        console.error('Failed to load public posts:', err);
+        setPostsError(err.message || 'Failed to load problems from database.');
+      } finally {
+        setLoadingPosts(false);
+      }
+    }
+    loadPublicProblems();
+  }, []);
+
+  // Handle URL query navigation on load (e.g. ?search=water)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const q = p.get('search') || p.get('q');
+    if (q) {
+      setSearchQuery(q);
+      setTimeout(() => {
+        const el = document.getElementById('search-problems');
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+      }, 350);
+    }
+  }, []);
+
+  const handleVote = async (postId, direction = 'up') => {
+    if (!currentUser) {
+      openAuthModal('login');
+      setStatusMsg({ type: 'error', text: 'Please sign in or create an account to vote on problems.' });
+      return;
+    }
+    try {
+      const updated = direction === 'down'
+        ? await postService.downvotePost(postId, currentUser.id)
+        : await postService.likePost(postId, currentUser.id);
+      if (updated) {
+        setPosts(prev => prev.map(p => p.id === postId ? updated : p));
+        setSelectedPost(prev => prev && prev.id === postId ? updated : prev);
+      }
+    } catch (err) {
+      console.error('Vote failed:', err);
+    }
+  };
+
+  const handleDownvote = (postId) => handleVote(postId, 'down');
+
+  const filteredPosts = filterProblems(posts, {
+    query: searchQuery,
+    category: selectedCategory,
+    status: selectedStatus,
+    sortBy
+  });
+
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const a = p.get('auth');
@@ -189,6 +264,8 @@ export default function App() {
         onToggleTheme={toggleTheme}
         onOpenAuth={() => openAuthModal('login')}
         onLogout={handleLogout}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       <main className="lp-main" ref={mainRef}>
@@ -235,6 +312,17 @@ export default function App() {
                   <a href={`/${currentUser.role}.html`} className="lp-btn-primary" style={{ textDecoration: 'none' }}>
                     Enter Dashboard <span className="lp-btn-icon">→</span>
                   </a>
+                  <a 
+                    href="#search-problems" 
+                    className="lp-btn-ghost" 
+                    style={{ textDecoration: 'none' }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document.getElementById('search-problems')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                  >
+                    🔍 Search Problems ({posts.length})
+                  </a>
                   <button className="lp-btn-ghost" onClick={handleLogout}>Sign Out</button>
                 </>
               ) : (
@@ -242,6 +330,17 @@ export default function App() {
                   <button className="lp-btn-primary" onClick={() => openAuthModal('signup')}>
                     Join the Platform <span className="lp-btn-icon">→</span>
                   </button>
+                  <a 
+                    href="#search-problems" 
+                    className="lp-btn-ghost" 
+                    style={{ textDecoration: 'none' }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      document.getElementById('search-problems')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                  >
+                    🔍 Search Problems ({posts.length})
+                  </a>
                   <button className="lp-btn-ghost" onClick={() => openAuthModal('login')}>Sign In</button>
                 </>
               )}
@@ -256,6 +355,193 @@ export default function App() {
 
           <div className="lp-scroll-hint" aria-hidden="true">
             <div className="lp-scroll-line" />
+          </div>
+        </section>
+
+        {/* ═══ PUBLIC PROBLEM SEARCH & EXPLORER (OPEN TO ANYBODY) ═══ */}
+        <section className="lp-section lp-search-section" id="search-problems">
+          <div className="lp-section-inner">
+            <div className="lp-section-label reveal">
+              <span className="lp-label-line" />
+              <span>PUBLIC PROBLEM EXPLORER • OPEN SEARCH</span>
+              <span className="lp-label-line" />
+            </div>
+
+            <h2 className="lp-section-h reveal">
+              Search & Explore Public Problems
+            </h2>
+            <p className="lp-section-sub reveal">
+              Anybody can search, browse, and inspect citizen challenges. See community needs, analyze proposed university & enterprise solutions, and check discussion threads in real-time.
+            </p>
+
+            {/* Public Search Filter Card */}
+            <div className="public-search-box-card">
+              {/* Primary Search Input Row */}
+              <div className="public-search-bar-row">
+                <span className="public-search-icon">🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search problems by keyword, title, description, category, author, or ID (#)..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="public-main-search-input"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    className="public-search-clear-btn"
+                    onClick={() => setSearchQuery('')}
+                    title="Clear search"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Filters Bar: Categories, Status & Sort */}
+              <div className="public-filters-row">
+                {/* Category Pills */}
+                <div className="public-category-pills">
+                  <span className="filter-group-label">Category:</span>
+                  <div className="category-scroll-strip">
+                    {CATEGORIES.map((cat) => {
+                      const count = cat === 'All'
+                        ? posts.length
+                        : posts.filter(p => (p.category || '').toLowerCase() === cat.toLowerCase()).length;
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          className={`public-cat-pill ${selectedCategory === cat ? 'active' : ''}`}
+                          onClick={() => setSelectedCategory(cat)}
+                        >
+                          {cat} <span className="cat-count-badge">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Status Filter & Sort Dropdown */}
+                <div className="public-controls-subgroup">
+                  <div className="status-filter-pills">
+                    <span className="filter-group-label">Status:</span>
+                    {['All', 'Open', 'Resolved'].map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        className={`status-pill-btn ${selectedStatus === st ? 'active' : ''}`}
+                        onClick={() => setSelectedStatus(st)}
+                      >
+                        {st === 'Resolved' ? '✅ Resolved' : st === 'Open' ? '⭕ Open' : 'All'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="sort-select-wrapper">
+                    <label className="filter-group-label" htmlFor="public-sort-select">Sort:</label>
+                    <select
+                      id="public-sort-select"
+                      className="public-sort-select"
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                    >
+                      <option value="newest">Most Recent</option>
+                      <option value="score">Highest Upvotes</option>
+                      <option value="solutions">Most Solutions</option>
+                      <option value="comments">Most Comments</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Results count & Active filters status */}
+              <div className="public-search-meta-row">
+                <span className="public-results-count">
+                  {loadingPosts ? (
+                    'Loading live citizen problems...'
+                  ) : (
+                    <>Showing <strong>{filteredPosts.length}</strong> of <strong>{posts.length}</strong> problems</>
+                  )}
+                  {searchQuery && (
+                    <span className="active-filter-badge">
+                      Query: "<em>{searchQuery}</em>"
+                    </span>
+                  )}
+                  {selectedCategory !== 'All' && (
+                    <span className="active-filter-badge">
+                      Category: <em>{selectedCategory}</em>
+                    </span>
+                  )}
+                  {selectedStatus !== 'All' && (
+                    <span className="active-filter-badge">
+                      Status: <em>{selectedStatus}</em>
+                    </span>
+                  )}
+                </span>
+
+                {(searchQuery || selectedCategory !== 'All' || selectedStatus !== 'All') && (
+                  <button
+                    type="button"
+                    className="clear-all-filters-btn"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedCategory('All');
+                      setSelectedStatus('All');
+                    }}
+                  >
+                    Reset Filters ✕
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Problems List or Empty State */}
+            {loadingPosts ? (
+              <div className="search-loading-container">
+                <div className="search-spinner" />
+                <p>Loading problems from Supabase database...</p>
+              </div>
+            ) : postsError ? (
+              <div className="status-box error" style={{ margin: '1.5rem 0' }}>
+                {postsError}
+              </div>
+            ) : filteredPosts.length === 0 ? (
+              <div className="public-empty-search-card">
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🔍</div>
+                <h3>No problems found matching your search</h3>
+                <p>
+                  {searchQuery
+                    ? `No civic issues match "${searchQuery}". Try different keywords, problem ID, or clear filters.`
+                    : 'No problems currently match the selected filters.'}
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-blue"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSelectedCategory('All');
+                    setSelectedStatus('All');
+                  }}
+                >
+                  Clear Search Filters
+                </button>
+              </div>
+            ) : (
+              <div className="problems-feed-stream public-stream-grid">
+                {filteredPosts.map((post) => (
+                  <ProblemCard
+                    key={post.id}
+                    post={post}
+                    onVote={handleVote}
+                    onDownvote={handleDownvote}
+                    onSelectPost={(p) => setSelectedPost(p)}
+                    currentAccount={currentUser}
+                    currentAccountId={currentUser?.id}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
@@ -408,6 +694,18 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ═══ PUBLIC PROBLEM DETAIL MODAL (OPEN TO ANYBODY) ═══ */}
+      {selectedPost && (
+        <ProblemDetailModal
+          post={selectedPost}
+          onClose={() => setSelectedPost(null)}
+          currentAccount={currentUser}
+          onVote={handleVote}
+          onDownvote={handleDownvote}
+          onOpenAuth={(mode, role) => openAuthModal(mode, role)}
+        />
       )}
     </div>
   );

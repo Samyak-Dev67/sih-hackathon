@@ -22,7 +22,8 @@ export function ProblemDetailModal({
   onDeleteComment,
   onUpdateProblem,
   onDeleteProblem,
-  onToggleResolve
+  onToggleResolve,
+  onOpenAuth
 }) {
   if (!post) return null;
 
@@ -39,10 +40,11 @@ export function ProblemDetailModal({
     solutions = []
   } = post;
 
-  const userRole = currentAccount?.role || 'citizen';
-  const canSubmitSolution = userRole === 'university' || userRole === 'industry';
-  const hasLiked = liked_by.includes(currentAccount?.id);
-  const hasDownvoted = downvoted_by.includes(currentAccount?.id);
+  const isGuest = !currentAccount;
+  const userRole = currentAccount?.role || (isGuest ? 'guest' : 'citizen');
+  const canSubmitSolution = !isGuest && (userRole === 'university' || userRole === 'industry');
+  const hasLiked = currentAccount ? liked_by.includes(currentAccount.id) : false;
+  const hasDownvoted = currentAccount ? downvoted_by.includes(currentAccount.id) : false;
 
   // Author permissions check & username derivation
   const isAuthor = isPostAuthor(post, currentAccount);
@@ -595,8 +597,15 @@ export function ProblemDetailModal({
               <button 
                 type="button"
                 className={`detail-vote-btn ${hasLiked ? 'active-up' : ''}`}
-                onClick={() => onVote(id, 'up')}
-                title={hasLiked ? "Click to remove upvote" : "1 upvote per account"}
+                onClick={() => {
+                  if (isGuest) {
+                    if (onOpenAuth) onOpenAuth('login');
+                    else alert('Please sign in to upvote problems.');
+                  } else {
+                    onVote(id, 'up');
+                  }
+                }}
+                title={hasLiked ? "Click to remove upvote" : isGuest ? "Sign in to upvote" : "1 upvote per account"}
               >
                 ▲ Upvote ({score}) {hasLiked ? '• Upvoted' : ''}
               </button>
@@ -604,13 +613,16 @@ export function ProblemDetailModal({
                 type="button"
                 className={`detail-vote-btn ${hasDownvoted ? 'active-down' : ''}`}
                 onClick={() => {
-                  if (onDownvote) {
+                  if (isGuest) {
+                    if (onOpenAuth) onOpenAuth('login');
+                    else alert('Please sign in to downvote problems.');
+                  } else if (onDownvote) {
                     onDownvote(id);
                   } else {
                     onVote(id, 'down');
                   }
                 }}
-                title={hasDownvoted ? "Click to remove downvote" : "1 downvote per account"}
+                title={hasDownvoted ? "Click to remove downvote" : isGuest ? "Sign in to downvote" : "1 downvote per account"}
               >
                 ▼ Downvote {hasDownvoted ? '• Downvoted' : ''}
               </button>
@@ -626,6 +638,16 @@ export function ProblemDetailModal({
                   }}
                 >
                   + Submit a Solution
+                </button>
+              )}
+              {isGuest && (
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => onOpenAuth ? onOpenAuth('login') : null}
+                  style={{ fontSize: '0.82rem' }}
+                >
+                  Sign in to Contribute
                 </button>
               )}
             </div>
@@ -784,11 +806,28 @@ export function ProblemDetailModal({
               </div>
 
               {/* Citizen info notice */}
-              {userRole === 'citizen' && (
+              {!isGuest && userRole === 'citizen' && (
                 <div className="citizen-transparency-box" style={{ marginTop: '1.25rem' }}>
                   <div className="transparency-icon">💡</div>
                   <div className="transparency-text">
                     <strong>Solutions Showcase:</strong> Solutions are proposed by registered universities and enterprise partners. Citizens can discuss this problem under the <strong>💬 Comments</strong> tab.
+                  </div>
+                </div>
+              )}
+
+              {/* Guest info notice */}
+              {isGuest && (
+                <div className="citizen-transparency-box" style={{ marginTop: '1.25rem' }}>
+                  <div className="transparency-icon">💡</div>
+                  <div className="transparency-text" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '0.6rem' }}>
+                    <div>
+                      <strong>Are you a University or Enterprise Partner?</strong> Sign in to submit structured academic or industrial solutions for this problem.
+                    </div>
+                    {onOpenAuth && (
+                      <button type="button" className="btn btn-blue" style={{ fontSize: '0.8rem', padding: '0.35rem 0.8rem' }} onClick={() => onOpenAuth('signup', 'university')}>
+                        Sign In / Join
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -814,7 +853,7 @@ export function ProblemDetailModal({
               )}
 
               {/* Comment Post Form (ONLY Citizens can post) */}
-              {userRole === 'citizen' ? (
+              {!isGuest && userRole === 'citizen' ? (
                 <form onSubmit={handleCommentSubmit} className="citizen-comment-input-box" style={{ margin: '1rem 0 1.5rem 0' }}>
                   <textarea
                     rows={3}
@@ -837,6 +876,20 @@ export function ProblemDetailModal({
                     </button>
                   </div>
                 </form>
+              ) : isGuest ? (
+                <div className="citizen-transparency-box" style={{ margin: '1rem 0' }}>
+                  <div className="transparency-icon">💬</div>
+                  <div className="transparency-text" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '0.6rem' }}>
+                    <div>
+                      <strong>Community Discussion:</strong> Sign in as a verified citizen to post comments on this problem.
+                    </div>
+                    {onOpenAuth && (
+                      <button type="button" className="btn btn-blue" style={{ fontSize: '0.8rem', padding: '0.35rem 0.8rem' }} onClick={() => onOpenAuth('login', 'citizen')}>
+                        Citizen Sign In
+                      </button>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <div className="citizen-transparency-box" style={{ margin: '1rem 0' }}>
                   <div className="transparency-icon">ℹ️</div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ProblemCard } from './ProblemCard';
 import { CATEGORIES } from '../data/mockData';
+import { filterProblems } from '../utils/search';
 
 export function UniversityDashboard({ 
   currentAccount, 
@@ -12,17 +13,9 @@ export function UniversityDashboard({
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredPosts = posts.filter(post => {
-    if (selectedCategory !== 'All' && (post.category || '').toLowerCase() !== selectedCategory.toLowerCase()) {
-      return false;
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const matchTitle = (post.title || '').toLowerCase().includes(q);
-      const matchDesc = (post.desc || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchDesc) return false;
-    }
-    return true;
+  const filteredPosts = filterProblems(posts, {
+    query: searchQuery,
+    category: selectedCategory
   });
 
   return (
@@ -82,11 +75,21 @@ export function UniversityDashboard({
             <div className="feed-search-box">
               <input 
                 type="text"
-                placeholder="Search citizen problems..."
+                placeholder="Search by keyword, ID (#), or category..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="feed-search-input"
               />
+              {searchQuery && (
+                <button 
+                  type="button" 
+                  className="feed-search-clear-btn" 
+                  onClick={() => setSearchQuery('')}
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 
@@ -94,7 +97,21 @@ export function UniversityDashboard({
             {filteredPosts.length === 0 ? (
               <div className="empty-feed-card">
                 <h3>No citizen problems found</h3>
-                <p>Check back soon or adjust your category search.</p>
+                <p>
+                  {searchQuery || selectedCategory !== 'All'
+                    ? `No problems match your search filters ${searchQuery ? `("${searchQuery}")` : ''}.`
+                    : 'Check back soon or adjust your category search.'}
+                </p>
+                {(searchQuery || selectedCategory !== 'All') && (
+                  <button 
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}
+                    style={{ marginTop: '0.5rem' }}
+                  >
+                    Reset Search Filters
+                  </button>
+                )}
               </div>
             ) : (
               filteredPosts.map((post) => (
