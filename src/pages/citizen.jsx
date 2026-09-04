@@ -61,9 +61,16 @@ function CitizenPage() {
   const handleDownvote = (postId) => handleVote(postId, 'down');
 
   const handleCreateProblem = async (problemData) => {
-    const created = await postService.createPost(problemData);
-    setPosts(prev => [created, ...prev]);
-    setSelectedPost(created);
+    let created;
+    if (problemData.imageFile) {
+      created = await postService.uploadImageAndCreatePost(problemData.imageFile, problemData);
+    } else {
+      created = await postService.createPost(problemData);
+    }
+    if (created) {
+      setPosts(prev => [created, ...prev]);
+      setSelectedPost(created);
+    }
   };
 
   const handleSubmitSolution = async (postId, solData) => {

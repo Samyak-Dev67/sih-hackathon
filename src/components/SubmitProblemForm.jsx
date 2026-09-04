@@ -1,10 +1,11 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { CATEGORIES } from '../data/mockData';
 
 export function SubmitProblemForm({ onSubmitProblem, onCancel }) {
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
   const [img, setImg] = useState('');
+  const [imageFile, setImageFile] = useState(null);
   const [category, setCategory] = useState('Infrastructure');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,14 +21,12 @@ export function SubmitProblemForm({ onSubmitProblem, onCancel }) {
     setErrorMsg('');
 
     try {
-      // Conceptually sends ONLY the fields matching backend schema:
-      // { title, desc, img, category }
-      // Do NOT invent id or created_at
       await onSubmitProblem({
         title: title.trim(),
         desc: desc.trim(),
         img: img.trim(),
-        category: category || 'Infrastructure'
+        category: category || 'Infrastructure',
+        imageFile: imageFile
       });
     } catch (err) {
       setErrorMsg(err.message || 'Error submitting problem.');
@@ -93,13 +92,30 @@ export function SubmitProblemForm({ onSubmitProblem, onCancel }) {
             />
           </div>
 
-          {/* Image URL if applicable */}
+          {/* Image Upload or URL */}
           <div className="form-field-group">
-            <label className="field-label">Image URL (Optional)</label>
+            <label className="field-label">Attach Image (Optional)</label>
+            <input 
+              type="file"
+              accept="image/*"
+              className="field-input"
+              style={{ padding: '0.45rem 0.6rem' }}
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  setImageFile(e.target.files[0]);
+                } else {
+                  setImageFile(null);
+                }
+              }}
+            />
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.25rem', display: 'block' }}>
+              Uploads directly to Supabase Storage (<code style={{ fontSize: '0.75rem' }}>post-images</code>). Or specify an Image URL below:
+            </small>
             <input 
               type="url"
               className="field-input"
-              placeholder="https://example.com/photo.jpg"
+              style={{ marginTop: '0.4rem' }}
+              placeholder="Or enter image URL (https://example.com/photo.jpg)"
               value={img}
               onChange={(e) => setImg(e.target.value)}
             />

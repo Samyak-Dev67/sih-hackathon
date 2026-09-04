@@ -1,4 +1,5 @@
 import { INITIAL_POSTS } from '../data/mockData';
+import { supabase } from '../utils/supabase';
 
 /**
  * ==============================================================================
@@ -101,24 +102,70 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 /**
- * 1. Fetch All Problems
- * Fetches the problem feed from the backend, with fallback to the 2 Lorem Ipsum demo questions.
+ * 1. Fetch All Posts (Supabase integration)
+ * Fetch all posts ordered by creation date
  */
-export async function getProblems() {
+export async function getPosts() {
+  try {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching posts:', error);
+      } else if (data && data.length > 0) {
+        return data;
+      }
+    }
+  } catch (err) {
+    console.error('Supabase getPosts error:', err);
+  }
+
+  // Fallback to backend API or local demo questions
   if (BACKEND_API_BASE_URL) {
     try {
       const data = await apiRequest(API_ENDPOINTS.fetchProblems, { method: 'GET' });
       return data;
     } catch (err) {
       console.warn('Backend unavailable, falling back to local demo posts:', err.message);
-      return getLocalDB();
     }
   }
   return getLocalDB();
 }
 
 /**
- * 2. Create a Problem
+ * Fetch a single post by ID (Supabase integration)
+ */
+export async function getPostById(postId) {
+  try {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('id', postId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching post:', error);
+      } else if (data) {
+        return data;
+      }
+    }
+  } catch (err) {
+    console.error('Supabase getPostById error:', err);
+  }
+
+  // Fallback to local DB
+  const posts = getLocalDB();
+  return posts.find(p => p.id === postId) || null;
+}
+
+export const getProblems = getPosts;
+
+/**
+ * 2. Create a Problem / Post
  * Sends JSON payload matching backend requirements:
  * {
  *   "title": "...",
@@ -127,13 +174,46 @@ export async function getProblems() {
  *   "category": "..."
  * }
  */
-export async function createProblem({ title, desc, img = '', category = 'Infrastructure' }) {
-  const payload = {
-    title: title.trim(),
-    desc: desc.trim(),
-    img: img ? img.trim() : '',
-    category: category.trim() || 'Infrastructure'
+export async function createPost(postData) {
+  // Support both custom postData and default/sample payload
+  const payload = postData ? {
+    title: postData.title ? postData.title.trim() : 'How to optimize database queries',
+    desc: postData.desc ? postData.desc.trim() : 'A complete guide on indexing and schema design.',
+    img: postData.img ? postData.img.trim() : '',
+    category: postData.category ? postData.category.trim() : 'Database',
+    score: typeof postData.score === 'number' ? postData.score : 0,
+    comments: postData.comments || [],
+    solutions: postData.solutions || []
+  } : {
+    title: 'How to optimize database queries',
+    desc: 'A complete guide on indexing and schema design.',
+    img: 'https://example.com/image.png',
+    category: 'Database',
+    score: 4.8,
+    comments: [
+      { user: 'Alice', comment: 'Great post!', created_at: new Date() }
+    ],
+    solutions: [
+      { solution_id: 1, text: 'Use composite indexes for filtering.' }
+    ]
   };
+
+  try {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('posts')
+        .insert([payload])
+        .select();
+
+      if (error) {
+        console.error('Error creating post in Supabase:', error);
+      } else if (data && data.length > 0) {
+        return data[0];
+      }
+    }
+  } catch (err) {
+    console.error('Supabase createPost error:', err);
+  }
 
   if (BACKEND_API_BASE_URL) {
     try {
@@ -157,15 +237,115 @@ export async function createProblem({ title, desc, img = '', category = 'Infrast
     desc: payload.desc,
     img: payload.img,
     category: payload.category,
-    score: 0,
-    comments: [],
+    score: payload.score || 0,
+    comments: payload.comments || [],
     liked_by: [],
-    solutions: []
+    downvoted_by: [],
+    solutions: payload.solutions || []
   };
 
   const updated = [newPost, ...posts];
   saveLocalDB(updated);
   return newPost;
+}
+
+export const createProblem = createPost;
+
+/**
+ * Upload Image to Supabase Storage ('post-images') and Create Post
+ */
+export async function uploadImageAndCreatePost(file, postData = {}) {
+  try {
+    let imageUrl = postData.img || '';
+
+    if (file && supabase) {
+      // 1. Generate a unique filename to avoid overwriting existing files
+      const fileExt = file.name ? file.name.split('.').pop() : 'png';
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `public/${fileName}`;
+
+      // 2. Upload file to Supabase Storage bucket ('post-images')
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('post-images')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.warn('Storage upload error (bucket might not exist or lacks public permissions):', uploadError.message);
+      } else {
+        // 3. Get the public URL of the uploaded image
+        const { data: urlData } = supabase.storage
+          .from('post-images')
+          .getPublicUrl(filePath);
+
+        if (urlData?.publicUrl) {
+          imageUrl = urlData.publicUrl;
+        }
+      }
+    }
+
+    // 4. Insert the new post record into the 'posts' table
+    return await createPost({
+      ...postData,
+      img: imageUrl
+    });
+  } catch (error) {
+    console.error('Error uploading image or creating post:', error.message);
+    return await createPost(postData);
+  }
+}
+
+/**
+ * Add a Comment to a Post (Supabase integration)
+ */
+export async function addComment(postId, newComment) {
+  try {
+    if (supabase) {
+      // 1. Fetch existing comments
+      const { data: post, error: fetchError } = await supabase
+        .from('posts')
+        .select('comments')
+        .eq('id', postId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching existing comments:', fetchError);
+      } else {
+        const updatedComments = [...(post.comments || []), newComment];
+
+        // 2. Update with the new array
+        const { data, error } = await supabase
+          .from('posts')
+          .update({ comments: updatedComments })
+          .eq('id', postId)
+          .select();
+
+        if (error) {
+          console.error('Error updating comments in Supabase:', error);
+        } else if (data && data.length > 0) {
+          return data[0];
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Supabase addComment error:', err);
+  }
+
+  // Local fallback
+  const posts = getLocalDB();
+  let updatedPost = null;
+  const nextPosts = posts.map(p => {
+    if (p.id === postId) {
+      const existing = Array.isArray(p.comments) ? p.comments : [];
+      updatedPost = {
+        ...p,
+        comments: [...existing, newComment]
+      };
+      return updatedPost;
+    }
+    return p;
+  });
+  saveLocalDB(nextPosts);
+  return updatedPost;
 }
 
 /**
@@ -380,9 +560,12 @@ export async function getSolutions(postId) {
  */
 export const postService = {
   getProblems,
-  getPosts: getProblems,
+  getPosts,
+  getPostById,
   createProblem,
-  createPost: createProblem,
+  createPost,
+  uploadImageAndCreatePost,
+  addComment,
   likeProblem,
   likePost: likeProblem,
   downvoteProblem,
