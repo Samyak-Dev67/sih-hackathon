@@ -47,14 +47,18 @@ function IndustryPage() {
     }
   }, [account]);
 
-  const handleVote = async (postId) => {
+  const handleVote = async (postId, direction = 'up') => {
     if (!account) return;
-    const updated = await postService.likePost(postId, account.id);
+    const updated = direction === 'down'
+      ? await postService.downvotePost(postId, account.id)
+      : await postService.likePost(postId, account.id);
     if (updated) {
       setPosts(prev => prev.map(p => p.id === postId ? updated : p));
       if (selectedPost && selectedPost.id === postId) setSelectedPost(updated);
     }
   };
+
+  const handleDownvote = (postId) => handleVote(postId, 'down');
 
   const handleSubmitSolution = async (postId, solData) => {
     const updated = await postService.submitSolution(postId, solData);
@@ -80,6 +84,7 @@ function IndustryPage() {
             currentAccount={account}
             posts={posts}
             onVote={handleVote}
+            onDownvote={handleDownvote}
             onSelectPost={(post) => setSelectedPost(post)}
           />
         </AuthGuard>
@@ -90,6 +95,7 @@ function IndustryPage() {
           onClose={() => setSelectedPost(null)}
           currentAccount={account}
           onVote={handleVote}
+          onDownvote={handleDownvote}
           onSubmitSolution={handleSubmitSolution}
         />
       )}

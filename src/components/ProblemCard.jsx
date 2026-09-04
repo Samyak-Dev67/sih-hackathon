@@ -1,6 +1,6 @@
-﻿import React from 'react';
+import React from 'react';
 
-export function ProblemCard({ post, onVote, onSelectPost, currentAccountId }) {
+export function ProblemCard({ post, onVote, onDownvote, onSelectPost, currentAccountId }) {
   const {
     id,
     title,
@@ -10,10 +10,12 @@ export function ProblemCard({ post, onVote, onSelectPost, currentAccountId }) {
     score = 0,
     created_at,
     liked_by = [],
+    downvoted_by = [],
     solutions = []
   } = post;
 
   const hasLiked = liked_by.includes(currentAccountId);
+  const hasDownvoted = downvoted_by.includes(currentAccountId);
 
   // Format relative time
   const getTimeAgo = (dateStr) => {
@@ -31,25 +33,35 @@ export function ProblemCard({ post, onVote, onSelectPost, currentAccountId }) {
 
   return (
     <div className="problem-card">
-      {/* Upvote Column - Enforces 1 like per account */}
+      {/* Upvote/Downvote Column - Enforces 1 vote per account */}
       <div className="vote-column">
         <button 
           type="button"
           className={`vote-arrow ${hasLiked ? 'active-up' : ''}`}
-          onClick={(e) => { e.stopPropagation(); onVote(id); }}
-          title={hasLiked ? "You liked this (click to remove)" : "Click to like (1 like per account)"}
-          aria-label="Like"
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            onVote(id, 'up'); 
+          }}
+          title={hasLiked ? "You upvoted this (click to remove)" : "Click to upvote"}
+          aria-label="Upvote"
         >
           ▲
         </button>
-        <span className={`vote-count ${hasLiked ? 'vote-count-up' : ''}`}>
+        <span className={`vote-count ${hasLiked ? 'vote-count-up' : hasDownvoted ? 'vote-count-down' : ''}`}>
           {score}
         </span>
         <button 
           type="button"
-          className="vote-arrow"
-          onClick={(e) => { e.stopPropagation(); onVote(id); }}
-          title={hasLiked ? "Remove like" : "Like"}
+          className={`vote-arrow ${hasDownvoted ? 'active-down' : ''}`}
+          onClick={(e) => { 
+            e.stopPropagation(); 
+            if (onDownvote) {
+              onDownvote(id);
+            } else {
+              onVote(id, 'down');
+            }
+          }}
+          title={hasDownvoted ? "You downvoted this (click to remove)" : "Click to downvote"}
           aria-label="Downvote"
         >
           ▼

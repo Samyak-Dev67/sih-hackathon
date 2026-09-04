@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { ProblemCard } from './ProblemCard';
 import { SubmitProblemForm } from './SubmitProblemForm';
 import { CATEGORIES } from '../data/mockData';
@@ -7,6 +7,7 @@ export function CitizenDashboard({
   currentAccount, 
   posts = [], 
   onVote, 
+  onDownvote,
   onSelectPost, 
   onSubmitProblem 
 }) {
@@ -145,6 +146,7 @@ export function CitizenDashboard({
                     key={post.id}
                     post={post}
                     onVote={onVote}
+                    onDownvote={onDownvote}
                     onSelectPost={onSelectPost}
                     currentAccountId={currentAccount?.id}
                   />

@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { ProblemCard } from './ProblemCard';
 import { CATEGORIES } from '../data/mockData';
 
@@ -6,6 +6,7 @@ export function UniversityDashboard({
   currentAccount, 
   posts = [], 
   onVote, 
+  onDownvote,
   onSelectPost 
 }) {
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -101,6 +102,7 @@ export function UniversityDashboard({
                   key={post.id}
                   post={post}
                   onVote={onVote}
+                  onDownvote={onDownvote}
                   onSelectPost={onSelectPost}
                   currentAccountId={currentAccount?.id}
                 />

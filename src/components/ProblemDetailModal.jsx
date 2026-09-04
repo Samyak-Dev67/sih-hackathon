@@ -1,10 +1,11 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 
 export function ProblemDetailModal({ 
   post, 
   onClose, 
   currentAccount, 
   onVote, 
+  onDownvote,
   onSubmitSolution 
 }) {
   if (!post) return null;
@@ -18,12 +19,14 @@ export function ProblemDetailModal({
     score = 0,
     created_at,
     liked_by = [],
+    downvoted_by = [],
     solutions = []
   } = post;
 
   const userRole = currentAccount?.role || 'citizen';
   const canSubmitSolution = userRole === 'university' || userRole === 'industry';
   const hasLiked = liked_by.includes(currentAccount?.id);
+  const hasDownvoted = downvoted_by.includes(currentAccount?.id);
 
   // Solution form state
   const [solTitle, setSolTitle] = useState('');
@@ -108,10 +111,24 @@ export function ProblemDetailModal({
               <button 
                 type="button"
                 className={`detail-vote-btn ${hasLiked ? 'active-up' : ''}`}
-                onClick={() => onVote(id)}
-                title={hasLiked ? "Click to remove like" : "1 like per account"}
+                onClick={() => onVote(id, 'up')}
+                title={hasLiked ? "Click to remove upvote" : "1 upvote per account"}
               >
-                ▲ Score ({score}) {hasLiked ? '• Liked' : ''}
+                ▲ Upvote ({score}) {hasLiked ? '• Upvoted' : ''}
+              </button>
+              <button 
+                type="button"
+                className={`detail-vote-btn ${hasDownvoted ? 'active-down' : ''}`}
+                onClick={() => {
+                  if (onDownvote) {
+                    onDownvote(id);
+                  } else {
+                    onVote(id, 'down');
+                  }
+                }}
+                title={hasDownvoted ? "Click to remove downvote" : "1 downvote per account"}
+              >
+                ▼ Downvote {hasDownvoted ? '• Downvoted' : ''}
               </button>
 
               {/* Submit Solution Button for University & Industry */}

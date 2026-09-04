@@ -169,14 +169,16 @@ export async function createProblem({ title, desc, img = '', category = 'Infrast
 }
 
 /**
- * 3. Like a Problem
+ * 3. Like (Upvote) a Problem
  * Uses the existing `score` numeric field for likes.
- * One authenticated account must only be able to like a particular problem once.
- * The frontend prevents repeated likes (toggles on/off), while the backend enforces it.
+ * One authenticated account can give 1 upvote.
+ * If already upvoted, clicking upvote again removes the upvote.
+ * If user had downvoted, clicking upvote removes downvote and adds upvote.
  */
 export async function likeProblem(postId, accountId = 'default-account') {
   const payload = {
-    account_id: accountId
+    account_id: accountId,
+    vote_type: 'up'
   };
 
   if (BACKEND_API_BASE_URL) {
@@ -191,31 +193,108 @@ export async function likeProblem(postId, accountId = 'default-account') {
     }
   }
 
-  // Fallback local simulation enforcing 1 like per account
+  // Fallback local simulation enforcing 1 vote per account
   const posts = getLocalDB();
   let updatedPost = null;
 
   const nextPosts = posts.map(p => {
     if (p.id === postId) {
       const likedBy = Array.isArray(p.liked_by) ? p.liked_by : [];
+      const downvotedBy = Array.isArray(p.downvoted_by) ? p.downvoted_by : [];
       const hasLiked = likedBy.includes(accountId);
+      const hasDownvoted = downvotedBy.includes(accountId);
       let newScore = Number(p.score) || 0;
-      let nextLikedBy;
+      let nextLikedBy = [...likedBy];
+      let nextDownvotedBy = [...downvotedBy];
 
       if (hasLiked) {
-        // Toggle off (unlike)
-        newScore = Math.max(0, newScore - 1);
-        nextLikedBy = likedBy.filter(id => id !== accountId);
+        // Toggle off upvote
+        newScore -= 1;
+        nextLikedBy = nextLikedBy.filter(id => id !== accountId);
       } else {
-        // Add single like
+        // Add upvote
         newScore += 1;
-        nextLikedBy = [...likedBy, accountId];
+        nextLikedBy.push(accountId);
+        if (hasDownvoted) {
+          // Remove previous downvote (+1 to revert downvote)
+          newScore += 1;
+          nextDownvotedBy = nextDownvotedBy.filter(id => id !== accountId);
+        }
       }
 
       updatedPost = {
         ...p,
         score: newScore,
-        liked_by: nextLikedBy
+        liked_by: nextLikedBy,
+        downvoted_by: nextDownvotedBy
+      };
+      return updatedPost;
+    }
+    return p;
+  });
+
+  saveLocalDB(nextPosts);
+  return updatedPost;
+}
+
+/**
+ * 3b. Downvote a Problem
+ * Decreases score by 1 if not yet downvoted.
+ * If already downvoted, clicking downvote again removes downvote.
+ * If user had upvoted, clicking downvote removes upvote and adds downvote.
+ */
+export async function downvoteProblem(postId, accountId = 'default-account') {
+  const payload = {
+    account_id: accountId,
+    vote_type: 'down'
+  };
+
+  if (BACKEND_API_BASE_URL) {
+    try {
+      const updatedPost = await apiRequest(`${API_ENDPOINTS.likeProblem(postId)}/downvote`, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      return updatedPost;
+    } catch (err) {
+      console.warn('Backend unavailable, updating downvote locally:', err.message);
+    }
+  }
+
+  // Fallback local simulation enforcing 1 downvote per account
+  const posts = getLocalDB();
+  let updatedPost = null;
+
+  const nextPosts = posts.map(p => {
+    if (p.id === postId) {
+      const likedBy = Array.isArray(p.liked_by) ? p.liked_by : [];
+      const downvotedBy = Array.isArray(p.downvoted_by) ? p.downvoted_by : [];
+      const hasLiked = likedBy.includes(accountId);
+      const hasDownvoted = downvotedBy.includes(accountId);
+      let newScore = Number(p.score) || 0;
+      let nextLikedBy = [...likedBy];
+      let nextDownvotedBy = [...downvotedBy];
+
+      if (hasDownvoted) {
+        // Toggle off downvote
+        newScore += 1;
+        nextDownvotedBy = nextDownvotedBy.filter(id => id !== accountId);
+      } else {
+        // Add downvote
+        newScore -= 1;
+        nextDownvotedBy.push(accountId);
+        if (hasLiked) {
+          // Remove previous upvote (-1 to revert upvote)
+          newScore -= 1;
+          nextLikedBy = nextLikedBy.filter(id => id !== accountId);
+        }
+      }
+
+      updatedPost = {
+        ...p,
+        score: newScore,
+        liked_by: nextLikedBy,
+        downvoted_by: nextDownvotedBy
       };
       return updatedPost;
     }
@@ -306,6 +385,8 @@ export const postService = {
   createPost: createProblem,
   likeProblem,
   likePost: likeProblem,
+  downvoteProblem,
+  downvotePost: downvoteProblem,
   submitSolution,
   getSolutions
 };
