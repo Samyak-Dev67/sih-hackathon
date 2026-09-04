@@ -114,9 +114,15 @@ export async function getPosts() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching posts:', error);
-      } else if (data && data.length > 0) {
-        return data;
+        console.error('Error fetching posts from Supabase:', error);
+      } else if (Array.isArray(data)) {
+        // If data is returned (even empty array), return it, or if empty and local exists, fallback
+        if (data.length > 0) {
+          return data;
+        }
+        // If table is empty, return data (empty) or fallback if mock data is desired for preview
+        const local = getLocalDB();
+        return local.length > 0 ? local : [];
       }
     }
   } catch (err) {
@@ -200,14 +206,16 @@ export async function createPost(postData) {
 
   try {
     if (supabase) {
+      console.log('Attempting to insert post to Supabase:', payload);
       const { data, error } = await supabase
         .from('posts')
         .insert([payload])
         .select();
 
       if (error) {
-        console.error('Error creating post in Supabase:', error);
+        console.error('Supabase insert failed (Check RLS policies if error 42501):', error);
       } else if (data && data.length > 0) {
+        console.log('Successfully saved to Supabase:', data[0]);
         return data[0];
       }
     }
