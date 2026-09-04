@@ -102,86 +102,84 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 /**
- * 1. Fetch All Posts (Supabase integration)
- * Fetch all posts ordered by creation date
+ * 1. Fetch All Posts from Supabase
+ * Fetch all posts ordered by creation date.
+ * Throws error if Supabase request fails (no silent localStorage fallback).
  */
 export async function getPosts() {
-  try {
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching posts from Supabase:', error);
-      } else if (Array.isArray(data)) {
-        // If data is returned (even empty array), return it, or if empty and local exists, fallback
-        if (data.length > 0) {
-          return data;
-        }
-        // If table is empty, return data (empty) or fallback if mock data is desired for preview
-        const local = getLocalDB();
-        return local.length > 0 ? local : [];
-      }
-    }
-  } catch (err) {
-    console.error('Supabase getPosts error:', err);
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized. Please verify VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
   }
 
-  // Fallback to backend API or local demo questions
-  if (BACKEND_API_BASE_URL) {
-    try {
-      const data = await apiRequest(API_ENDPOINTS.fetchProblems, { method: 'GET' });
-      return data;
-    } catch (err) {
-      console.warn('Backend unavailable, falling back to local demo posts:', err.message);
+  console.log('📡 [Supabase SELECT]: Fetching posts from "posts" table...');
+  const { data, error } = await supabase
+    .from('posts')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('❌ [Supabase SELECT Error]:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    if (error.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security policy blocked SELECT on "posts" table. Please configure an RLS SELECT policy in Supabase.');
     }
+    throw new Error(`Supabase SELECT failed: ${error.message} (code: ${error.code})`);
   }
-  return getLocalDB();
+
+  console.log(`✅ [Supabase SELECT Success]: Retrieved ${data ? data.length : 0} posts from Supabase.`);
+  return data || [];
 }
 
 /**
- * Fetch a single post by ID (Supabase integration)
+ * Fetch a single post by ID from Supabase
  */
 export async function getPostById(postId) {
-  try {
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('posts')
-        .select('*')
-        .eq('id', postId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching post:', error);
-      } else if (data) {
-        return data;
-      }
-    }
-  } catch (err) {
-    console.error('Supabase getPostById error:', err);
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
   }
 
-  // Fallback to local DB
-  const posts = getLocalDB();
-  return posts.find(p => p.id === postId) || null;
+  console.log(`📡 [Supabase SELECT]: Fetching post #${postId}...`);
+  const { data, error } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('id', postId)
+    .single();
+
+  if (error) {
+    console.error('❌ [Supabase SELECT Error (getPostById)]:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    throw new Error(`Supabase getPostById failed: ${error.message} (code: ${error.code})`);
+  }
+
+  return data;
 }
 
 export const getProblems = getPosts;
 
 /**
- * 2. Create a Problem / Post
- * Sends JSON payload matching backend requirements:
- * {
- *   "title": "...",
- *   "desc": "...",
- *   "img": "...",
- *   "category": "..."
- * }
+ * 2. Create a Problem / Post in Supabase
+ * Inserts directly into Supabase `posts` table.
+ * Throws actual Supabase error on failure (no silent localStorage fallback).
  */
 export async function createPost(postData) {
-  // Support both custom postData and default/sample payload
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
+  }
+
   const payload = postData ? {
     title: postData.title ? postData.title.trim() : 'How to optimize database queries',
     desc: postData.desc ? postData.desc.trim() : 'A complete guide on indexing and schema design.',
@@ -204,57 +202,35 @@ export async function createPost(postData) {
     ]
   };
 
-  try {
-    if (supabase) {
-      console.log('Attempting to insert post to Supabase:', payload);
-      const { data, error } = await supabase
-        .from('posts')
-        .insert([payload])
-        .select();
+  console.log('📡 [Supabase INSERT]: Attempting to insert into "posts" table:', payload);
 
-      if (error) {
-        console.error('Supabase insert failed (Check RLS policies if error 42501):', error);
-      } else if (data && data.length > 0) {
-        console.log('Successfully saved to Supabase:', data[0]);
-        return data[0];
-      }
+  const { data, error } = await supabase
+    .from('posts')
+    .insert([payload])
+    .select();
+
+  if (error) {
+    console.error('❌ [Supabase INSERT Error]:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    if (error.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked INSERT into "posts" table (code 42501).');
+      console.error('👉 Fix: Go to Supabase Dashboard > Authentication > Policies (or Table Editor > posts > Policies), and add an INSERT policy allowing anon/authenticated users: WITH CHECK (true)');
     }
-  } catch (err) {
-    console.error('Supabase createPost error:', err);
+    throw new Error(`Supabase INSERT failed: ${error.message} (code: ${error.code})`);
   }
 
-  if (BACKEND_API_BASE_URL) {
-    try {
-      const created = await apiRequest(API_ENDPOINTS.createProblem, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      return created;
-    } catch (err) {
-      console.warn('Backend unavailable, saving problem locally:', err.message);
-    }
+  if (!data || data.length === 0) {
+    const err = new Error('Supabase INSERT returned no rows. Check if an RLS SELECT policy is preventing reading the inserted row.');
+    console.warn('⚠️ [Supabase Warning]:', err.message);
+    throw err;
   }
 
-  // Fallback simulation matching schema:
-  // id: int8, created_at: timestamptz, score: numeric, comments: json, solutions: json
-  const posts = getLocalDB();
-  const newPost = {
-    id: Date.now(),
-    created_at: new Date().toISOString(),
-    title: payload.title,
-    desc: payload.desc,
-    img: payload.img,
-    category: payload.category,
-    score: payload.score || 0,
-    comments: payload.comments || [],
-    liked_by: [],
-    downvoted_by: [],
-    solutions: payload.solutions || []
-  };
-
-  const updated = [newPost, ...posts];
-  saveLocalDB(updated);
-  return newPost;
+  console.log('✅ [Supabase INSERT Success]: Row successfully written to "posts" table:', data[0]);
+  return data[0];
 }
 
 export const createProblem = createPost;
@@ -263,241 +239,195 @@ export const createProblem = createPost;
  * Upload Image to Supabase Storage ('post-images') and Create Post
  */
 export async function uploadImageAndCreatePost(file, postData = {}) {
-  try {
-    let imageUrl = postData.img || '';
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
+  }
 
-    if (file && supabase) {
-      // 1. Generate a unique filename to avoid overwriting existing files
-      const fileExt = file.name ? file.name.split('.').pop() : 'png';
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `public/${fileName}`;
+  let imageUrl = postData.img || '';
 
-      // 2. Upload file to Supabase Storage bucket ('post-images')
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('post-images')
-        .upload(filePath, file);
+  if (file) {
+    console.log('📡 [Supabase Storage]: Uploading file to bucket "post-images"...', file.name);
+    const fileExt = file.name ? file.name.split('.').pop() : 'png';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+    const filePath = `public/${fileName}`;
 
-      if (uploadError) {
-        console.warn('Storage upload error (bucket might not exist or lacks public permissions):', uploadError.message);
-      } else {
-        // 3. Get the public URL of the uploaded image
-        const { data: urlData } = supabase.storage
-          .from('post-images')
-          .getPublicUrl(filePath);
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('post-images')
+      .upload(filePath, file);
 
-        if (urlData?.publicUrl) {
-          imageUrl = urlData.publicUrl;
-        }
-      }
+    if (uploadError) {
+      console.error('❌ [Supabase Storage Error]: Failed to upload to "post-images" bucket:', {
+        message: uploadError.message
+      });
+      console.error('👉 Ensure bucket "post-images" exists in Supabase Storage and has public upload policies.');
+      throw new Error(`Supabase Storage upload failed: ${uploadError.message}`);
     }
 
-    // 4. Insert the new post record into the 'posts' table
-    return await createPost({
-      ...postData,
-      img: imageUrl
-    });
-  } catch (error) {
-    console.error('Error uploading image or creating post:', error.message);
-    return await createPost(postData);
+    const { data: urlData } = supabase.storage
+      .from('post-images')
+      .getPublicUrl(filePath);
+
+    if (urlData?.publicUrl) {
+      imageUrl = urlData.publicUrl;
+      console.log('✅ [Supabase Storage Success]: Public image URL generated:', imageUrl);
+    }
   }
+
+  return await createPost({
+    ...postData,
+    img: imageUrl
+  });
 }
 
 /**
- * Add a Comment to a Post (Supabase integration)
+ * Add a Comment to a Post in Supabase
  */
 export async function addComment(postId, newComment) {
-  try {
-    if (supabase) {
-      // 1. Fetch existing comments
-      const { data: post, error: fetchError } = await supabase
-        .from('posts')
-        .select('comments')
-        .eq('id', postId)
-        .single();
-
-      if (fetchError) {
-        console.error('Error fetching existing comments:', fetchError);
-      } else {
-        const updatedComments = [...(post.comments || []), newComment];
-
-        // 2. Update with the new array
-        const { data, error } = await supabase
-          .from('posts')
-          .update({ comments: updatedComments })
-          .eq('id', postId)
-          .select();
-
-        if (error) {
-          console.error('Error updating comments in Supabase:', error);
-        } else if (data && data.length > 0) {
-          return data[0];
-        }
-      }
-    }
-  } catch (err) {
-    console.error('Supabase addComment error:', err);
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
   }
 
-  // Local fallback
-  const posts = getLocalDB();
-  let updatedPost = null;
-  const nextPosts = posts.map(p => {
-    if (p.id === postId) {
-      const existing = Array.isArray(p.comments) ? p.comments : [];
-      updatedPost = {
-        ...p,
-        comments: [...existing, newComment]
-      };
-      return updatedPost;
+  console.log(`📡 [Supabase UPDATE]: Adding comment to post #${postId}...`);
+  // 1. Fetch existing comments
+  const { data: post, error: fetchError } = await supabase
+    .from('posts')
+    .select('comments')
+    .eq('id', postId)
+    .single();
+
+  if (fetchError) {
+    console.error('❌ [Supabase SELECT Error (addComment)]:', fetchError);
+    throw new Error(`Supabase failed to fetch existing comments: ${fetchError.message}`);
+  }
+
+  const updatedComments = [...(post.comments || []), newComment];
+
+  // 2. Update with the new array
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ comments: updatedComments })
+    .eq('id', postId)
+    .select();
+
+  if (error) {
+    console.error('❌ [Supabase UPDATE Error (addComment)]:', error);
+    if (error.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501).');
     }
-    return p;
-  });
-  saveLocalDB(nextPosts);
-  return updatedPost;
+    throw new Error(`Supabase update comments failed: ${error.message}`);
+  }
+
+  console.log('✅ [Supabase UPDATE Success]: Comments updated on post #', postId);
+  return data && data.length > 0 ? data[0] : null;
 }
 
 /**
- * 3. Like (Upvote) a Problem
- * Uses the existing `score` numeric field for likes.
- * One authenticated account can give 1 upvote.
- * If already upvoted, clicking upvote again removes the upvote.
- * If user had downvoted, clicking upvote removes downvote and adds upvote.
+ * 3. Like (Upvote) a Problem in Supabase
+ * Directly updates `score` in the Supabase `posts` table.
  */
 export async function likeProblem(postId, accountId = 'default-account') {
-  const payload = {
-    account_id: accountId,
-    vote_type: 'up'
-  };
-
-  if (BACKEND_API_BASE_URL) {
-    try {
-      const updatedPost = await apiRequest(API_ENDPOINTS.likeProblem(postId), {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      return updatedPost;
-    } catch (err) {
-      console.warn('Backend unavailable, updating likes locally:', err.message);
-    }
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
   }
 
-  // Fallback local simulation enforcing 1 vote per account
-  const posts = getLocalDB();
-  let updatedPost = null;
+  console.log(`📡 [Supabase UPDATE]: Processing upvote for post #${postId}...`);
+  // 1. Fetch current score from Supabase
+  const { data: post, error: fetchError } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('id', postId)
+    .single();
 
-  const nextPosts = posts.map(p => {
-    if (p.id === postId) {
-      const likedBy = Array.isArray(p.liked_by) ? p.liked_by : [];
-      const downvotedBy = Array.isArray(p.downvoted_by) ? p.downvoted_by : [];
-      const hasLiked = likedBy.includes(accountId);
-      const hasDownvoted = downvotedBy.includes(accountId);
-      let newScore = Number(p.score) || 0;
-      let nextLikedBy = [...likedBy];
-      let nextDownvotedBy = [...downvotedBy];
+  if (fetchError) {
+    console.error('❌ [Supabase SELECT Error (likeProblem)]:', fetchError);
+    throw new Error(`Supabase failed to read post for upvote: ${fetchError.message}`);
+  }
 
-      if (hasLiked) {
-        // Toggle off upvote
-        newScore -= 1;
-        nextLikedBy = nextLikedBy.filter(id => id !== accountId);
-      } else {
-        // Add upvote
-        newScore += 1;
-        nextLikedBy.push(accountId);
-        if (hasDownvoted) {
-          // Remove previous downvote (+1 to revert downvote)
-          newScore += 1;
-          nextDownvotedBy = nextDownvotedBy.filter(id => id !== accountId);
-        }
-      }
+  const currentScore = Number(post.score) || 0;
+  const newScore = currentScore + 1;
 
-      updatedPost = {
-        ...p,
-        score: newScore,
-        liked_by: nextLikedBy,
-        downvoted_by: nextDownvotedBy
-      };
-      return updatedPost;
+  // 2. Update post score in Supabase
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ score: newScore })
+    .eq('id', postId)
+    .select();
+
+  if (error) {
+    console.error('❌ [Supabase UPDATE Error (likeProblem)]:', error);
+    if (error.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501). Add an UPDATE policy in Supabase.');
     }
-    return p;
-  });
+    throw new Error(`Supabase upvote failed: ${error.message}`);
+  }
 
-  saveLocalDB(nextPosts);
-  return updatedPost;
+  console.log(`✅ [Supabase UPDATE Success]: Post #${postId} score updated to ${newScore}`);
+  return data && data.length > 0 ? data[0] : { ...post, score: newScore };
 }
 
 /**
- * 3b. Downvote a Problem
- * Decreases score by 1 if not yet downvoted.
- * If already downvoted, clicking downvote again removes downvote.
- * If user had upvoted, clicking downvote removes upvote and adds downvote.
+ * 3b. Downvote a Problem in Supabase
+ * Directly decrements `score` in the Supabase `posts` table.
  */
 export async function downvoteProblem(postId, accountId = 'default-account') {
-  const payload = {
-    account_id: accountId,
-    vote_type: 'down'
-  };
-
-  if (BACKEND_API_BASE_URL) {
-    try {
-      const updatedPost = await apiRequest(`${API_ENDPOINTS.likeProblem(postId)}/downvote`, {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      return updatedPost;
-    } catch (err) {
-      console.warn('Backend unavailable, updating downvote locally:', err.message);
-    }
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
   }
 
-  // Fallback local simulation enforcing 1 downvote per account
-  const posts = getLocalDB();
-  let updatedPost = null;
+  console.log(`📡 [Supabase UPDATE]: Processing downvote for post #${postId}...`);
+  // 1. Fetch current score from Supabase
+  const { data: post, error: fetchError } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('id', postId)
+    .single();
 
-  const nextPosts = posts.map(p => {
-    if (p.id === postId) {
-      const likedBy = Array.isArray(p.liked_by) ? p.liked_by : [];
-      const downvotedBy = Array.isArray(p.downvoted_by) ? p.downvoted_by : [];
-      const hasLiked = likedBy.includes(accountId);
-      const hasDownvoted = downvotedBy.includes(accountId);
-      let newScore = Number(p.score) || 0;
-      let nextLikedBy = [...likedBy];
-      let nextDownvotedBy = [...downvotedBy];
+  if (fetchError) {
+    console.error('❌ [Supabase SELECT Error (downvoteProblem)]:', fetchError);
+    throw new Error(`Supabase failed to read post for downvote: ${fetchError.message}`);
+  }
 
-      if (hasDownvoted) {
-        // Toggle off downvote
-        newScore += 1;
-        nextDownvotedBy = nextDownvotedBy.filter(id => id !== accountId);
-      } else {
-        // Add downvote
-        newScore -= 1;
-        nextDownvotedBy.push(accountId);
-        if (hasLiked) {
-          // Remove previous upvote (-1 to revert upvote)
-          newScore -= 1;
-          nextLikedBy = nextLikedBy.filter(id => id !== accountId);
-        }
-      }
+  const currentScore = Number(post.score) || 0;
+  const newScore = currentScore - 1;
 
-      updatedPost = {
-        ...p,
-        score: newScore,
-        liked_by: nextLikedBy,
-        downvoted_by: nextDownvotedBy
-      };
-      return updatedPost;
+  // 2. Update post score in Supabase
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ score: newScore })
+    .eq('id', postId)
+    .select();
+
+  if (error) {
+    console.error('❌ [Supabase UPDATE Error (downvoteProblem)]:', error);
+    if (error.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501). Add an UPDATE policy in Supabase.');
     }
-    return p;
-  });
+    throw new Error(`Supabase downvote failed: ${error.message}`);
+  }
 
-  saveLocalDB(nextPosts);
-  return updatedPost;
+  console.log(`✅ [Supabase UPDATE Success]: Post #${postId} score decremented to ${newScore}`);
+  return data && data.length > 0 ? data[0] : { ...post, score: newScore };
 }
 
 /**
- * 4. Submit a Solution
- * Sends the relevant problem ID and solution information as JSON.
+ * 4. Submit a Solution to Supabase
+ * Appends the solution object to the `solutions` JSON column in the Supabase `posts` table.
  */
 export async function submitSolution(postId, { title, desc, proposed_approach, author_name, author_role }) {
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
+  }
+
   const solutionPayload = {
     problem_id: postId,
     id: `sol-${Date.now()}`,
@@ -509,62 +439,68 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
     created_at: new Date().toISOString()
   };
 
-  if (BACKEND_API_BASE_URL) {
-    try {
-      const result = await apiRequest(API_ENDPOINTS.submitSolution(postId), {
-        method: 'POST',
-        body: JSON.stringify(solutionPayload)
-      });
-      return result;
-    } catch (err) {
-      console.warn('Backend unavailable, saving solution locally:', err.message);
-    }
+  console.log(`📡 [Supabase UPDATE]: Submitting solution for post #${postId}...`, solutionPayload);
+
+  // 1. Fetch existing solutions
+  const { data: post, error: fetchError } = await supabase
+    .from('posts')
+    .select('solutions')
+    .eq('id', postId)
+    .single();
+
+  if (fetchError) {
+    console.error('❌ [Supabase SELECT Error (submitSolution)]:', fetchError);
+    throw new Error(`Supabase failed to fetch existing solutions: ${fetchError.message}`);
   }
 
-  // Fallback local simulation appending to the problem's solutions json field
-  const posts = getLocalDB();
-  let updatedPost = null;
+  const existingSolutions = Array.isArray(post?.solutions) ? post.solutions : [];
+  const updatedSolutions = [solutionPayload, ...existingSolutions];
 
-  const nextPosts = posts.map(p => {
-    if (p.id === postId) {
-      const solutions = Array.isArray(p.solutions) ? p.solutions : [];
-      updatedPost = {
-        ...p,
-        solutions: [solutionPayload, ...solutions]
-      };
-      return updatedPost;
+  // 2. Update solutions array in Supabase
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ solutions: updatedSolutions })
+    .eq('id', postId)
+    .select();
+
+  if (error) {
+    console.error('❌ [Supabase UPDATE Error (submitSolution)]:', error);
+    if (error.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501).');
     }
-    return p;
-  });
+    throw new Error(`Supabase submitSolution failed: ${error.message}`);
+  }
 
-  saveLocalDB(nextPosts);
-  return updatedPost;
+  console.log('✅ [Supabase UPDATE Success]: Solution saved to Supabase for post #', postId);
+  return data && data.length > 0 ? data[0] : null;
 }
 
 /**
  * 5. Fetch Solutions for a Problem
- * Retrieves solutions for a specific problem ID.
  */
 export async function getSolutions(postId) {
-  if (BACKEND_API_BASE_URL) {
-    try {
-      const solutions = await apiRequest(API_ENDPOINTS.fetchSolutions(postId), {
-        method: 'GET'
-      });
-      return solutions;
-    } catch (err) {
-      console.warn('Backend unavailable, fetching solutions from local store:', err.message);
-    }
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
   }
 
-  const posts = getLocalDB();
-  const found = posts.find(p => p.id === postId);
-  return found?.solutions || [];
+  const { data, error } = await supabase
+    .from('posts')
+    .select('solutions')
+    .eq('id', postId)
+    .single();
+
+  if (error) {
+    console.error('❌ [Supabase SELECT Error (getSolutions)]:', error);
+    throw new Error(`Supabase getSolutions failed: ${error.message}`);
+  }
+
+  return data?.solutions || [];
 }
 
 /**
  * Combined API Service Object
- * Exposes all required functions with backwards-compatible aliases (getPosts, createPost, likePost)
  */
 export const postService = {
   getProblems,
