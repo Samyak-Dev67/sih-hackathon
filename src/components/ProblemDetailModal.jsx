@@ -197,6 +197,8 @@ export function ProblemDetailModal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+        {/* Header Bar */}
+        <div className="modal-header">
           <div className="modal-header-meta">
             {acceptedClaim ? (
               <span className="tag-pill status-accepted-badge">ACCEPTED</span>
