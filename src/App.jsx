@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './utils/supabase';
 import { DEMO_ACCOUNTS } from './data/mockData';
 import { Navbar } from './components/Navbar';
+import { InteractivePlayground } from './components/InteractivePlayground';
 
 /* ── Scroll-reveal hook ─────────────────────────────────────── */
 function useScrollReveal() {
@@ -317,20 +318,8 @@ export default function App() {
           </div>
         </section>
 
-        {/* ═══ STATS ═════════════════════════════════════════ */}
-        <section className="lp-stats-section reveal">
-          <div className="lp-stats-inner">
-            {[{ val: '3', label: 'Stakeholder Groups' }, { val: '1', label: 'Shared Platform' }, { val: '∞', label: 'Possibilities' }].map(({ val, label }, i) => (
-              <React.Fragment key={label}>
-                {i > 0 && <div className="lp-stat-divider" />}
-                <div className="lp-stat">
-                  <span className="lp-stat-val">{val}</span>
-                  <span className="lp-stat-lbl">{label}</span>
-                </div>
-              </React.Fragment>
-            ))}
-          </div>
-        </section>
+        {/* ═══ INTERACTIVE UI PLAYGROUND ════════════════════ */}
+        <InteractivePlayground />
 
         {/* ═══ CTA ═══════════════════════════════════════════ */}
         <section className="lp-cta-section">
