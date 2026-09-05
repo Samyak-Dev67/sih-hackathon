@@ -343,12 +343,6 @@ export default function App() {
             </button>
           </div>
         </section>
-
-        {/* ═══ FOOTER ════════════════════════════════════════ */}
-        <footer className="lp-footer">
-          <span>First Look — shared problems, practical progress.</span>
-          <span>Open civic network</span>
-        </footer>
       </main>
 
       {/* ═══ AUTH MODAL ════════════════════════════════════════ */}
