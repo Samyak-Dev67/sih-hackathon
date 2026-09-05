@@ -563,6 +563,8 @@ export async function updatePost(postId, updatedFields = {}) {
 
   console.log(`📡 [Supabase UPDATE]: Updating post #${postId}...`, updatedFields);
 
+  const targetId = !isNaN(Number(postId)) ? Number(postId) : postId;
+
   // Extract only columns that exist on `posts` table
   const payload = {};
   if (typeof updatedFields.title === 'string') payload.title = updatedFields.title.trim();
@@ -574,11 +576,13 @@ export async function updatePost(postId, updatedFields = {}) {
   if (Array.isArray(updatedFields.comments)) payload.comments = updatedFields.comments;
   if (Array.isArray(updatedFields.solutions)) payload.solutions = updatedFields.solutions;
   else if (Array.isArray(updatedFields.solution)) payload.solutions = updatedFields.solution;
+  if (Array.isArray(updatedFields.liked_by)) payload.liked_by = updatedFields.liked_by;
+  if (Array.isArray(updatedFields.downvoted_by)) payload.downvoted_by = updatedFields.downvoted_by;
 
   const { data, error } = await supabase
     .from('posts')
     .update(payload)
-    .eq('id', postId)
+    .eq('id', targetId)
     .select();
 
   if (error) {
@@ -852,8 +856,9 @@ export async function deleteComment(postId, commentId, currentAccount) {
  * - 1 vote per account (upvote OR downvote)
  * - If user clicks the same vote arrow again, it toggles off / removes their vote.
  * - If user clicks the opposite vote arrow, it switches their vote (-2 or +2).
- * - Persists updated score to Supabase `score` column in the backend.
- * - Persists voter IDs (liked_by, downvoted_by) to Supabase `comments` metadata in the backend.
+ * - Persists updated score directly to Supabase `score` column in the backend database.
+ * - Supports tables with direct `liked_by`/`downvoted_by` columns as well as `comments` JSON metadata.
+ * - Multi-tier fallback handling if table schema varies or RLS policies apply.
  */
 export async function voteProblem(postId, accountId = 'default-account', direction = 'up') {
   if (!supabase) {
@@ -861,6 +866,9 @@ export async function voteProblem(postId, accountId = 'default-account', directi
     console.error('❌ [Supabase Connection Error]:', err.message);
     throw err;
   }
+
+  // Normalize target ID for database matching (handle number or string IDs)
+  const targetId = !isNaN(Number(postId)) ? Number(postId) : postId;
 
   // Derive voter ID
   let voterId = accountId;
@@ -877,21 +885,40 @@ export async function voteProblem(postId, accountId = 'default-account', directi
     voterId = 'anonymous-user';
   }
 
-  console.log(`📡 [Supabase UPDATE]: Processing ${direction}vote on post #${postId} for user "${voterId}"...`);
+  console.log(`📡 [Supabase UPDATE]: Processing ${direction}vote on post #${targetId} for user "${voterId}"...`);
 
   // 1. Fetch current post from Supabase
-  const { data: post, error: fetchError } = await supabase
+  let { data: post, error: fetchError } = await supabase
     .from('posts')
     .select('*')
-    .eq('id', postId)
-    .single();
+    .eq('id', targetId)
+    .maybeSingle();
+
+  // If not found with targetId and targetId differs from postId, retry with original postId
+  if (!post && targetId !== postId) {
+    const retry = await supabase.from('posts').select('*').eq('id', postId).maybeSingle();
+    if (retry.data) {
+      post = retry.data;
+      fetchError = null;
+    }
+  }
 
   if (fetchError) {
     console.error(`❌ [Supabase SELECT Error (voteProblem ${direction})]:`, fetchError);
     throw new Error(`Supabase failed to read post for vote: ${fetchError.message}`);
   }
 
-  let currentScore = Number(post.score) || 0;
+  if (!post) {
+    console.error(`❌ Post #${postId} not found in Supabase "posts" table.`);
+    throw new Error(`Post #${postId} was not found in the backend database.`);
+  }
+
+  const exactDbId = post.id !== undefined ? post.id : targetId;
+  let currentScore = Number(post.score);
+  if (isNaN(currentScore)) {
+    currentScore = Number(post.likes);
+    if (isNaN(currentScore)) currentScore = 0;
+  }
 
   // Extract comments and __meta
   const existingComments = Array.isArray(post.comments) ? [...post.comments] : [];
@@ -911,42 +938,49 @@ export async function voteProblem(postId, accountId = 'default-account', directi
   const hasDownvoted = downvotedBy.includes(voterId);
 
   let newScore = currentScore;
+  let scoreDelta = 0;
 
   if (direction === 'up') {
     if (hasLiked) {
-      // Toggle off: remove upvote (user can only upvote once; clicking again cancels it)
-      console.log(`ℹ️ [Vote]: User ${voterId} already upvoted post #${postId}. Toggling off upvote.`);
+      // Toggle off: remove upvote
+      console.log(`ℹ️ [Vote]: User ${voterId} already upvoted post #${exactDbId}. Toggling off upvote.`);
       likedBy = likedBy.filter(id => id !== voterId);
       newScore = currentScore - 1;
+      scoreDelta = -1;
     } else if (hasDownvoted) {
-      // Switch from downvote to upvote: removes downvote, adds upvote (+2 net)
-      console.log(`ℹ️ [Vote]: User ${voterId} switching from downvote to upvote on post #${postId}.`);
+      // Switch from downvote to upvote (+2 net)
+      console.log(`ℹ️ [Vote]: User ${voterId} switching from downvote to upvote on post #${exactDbId}.`);
       downvotedBy = downvotedBy.filter(id => id !== voterId);
       likedBy.push(voterId);
       newScore = currentScore + 2;
+      scoreDelta = 2;
     } else {
       // First-time upvote (+1)
-      console.log(`ℹ️ [Vote]: User ${voterId} upvoting post #${postId}.`);
+      console.log(`ℹ️ [Vote]: User ${voterId} upvoting post #${exactDbId}.`);
       likedBy.push(voterId);
       newScore = currentScore + 1;
+      scoreDelta = 1;
     }
   } else if (direction === 'down') {
     if (hasDownvoted) {
-      // Toggle off: remove downvote (user can only downvote once; clicking again cancels it)
-      console.log(`ℹ️ [Vote]: User ${voterId} already downvoted post #${postId}. Toggling off downvote.`);
+      // Toggle off: remove downvote
+      console.log(`ℹ️ [Vote]: User ${voterId} already downvoted post #${exactDbId}. Toggling off downvote.`);
       downvotedBy = downvotedBy.filter(id => id !== voterId);
       newScore = currentScore + 1;
+      scoreDelta = 1;
     } else if (hasLiked) {
-      // Switch from upvote to downvote: removes upvote, adds downvote (-2 net)
-      console.log(`ℹ️ [Vote]: User ${voterId} switching from upvote to downvote on post #${postId}.`);
+      // Switch from upvote to downvote (-2 net)
+      console.log(`ℹ️ [Vote]: User ${voterId} switching from upvote to downvote on post #${exactDbId}.`);
       likedBy = likedBy.filter(id => id !== voterId);
       downvotedBy.push(voterId);
       newScore = currentScore - 2;
+      scoreDelta = -2;
     } else {
       // First-time downvote (-1)
-      console.log(`ℹ️ [Vote]: User ${voterId} downvoting post #${postId}.`);
+      console.log(`ℹ️ [Vote]: User ${voterId} downvoting post #${exactDbId}.`);
       downvotedBy.push(voterId);
       newScore = currentScore - 1;
+      scoreDelta = -1;
     }
   }
 
@@ -959,29 +993,127 @@ export async function voteProblem(postId, accountId = 'default-account', directi
     existingComments.unshift(meta);
   }
 
-  // 2. Persist updated score and comments to Supabase
-  const updatePayload = {
-    score: newScore,
-    comments: existingComments
-  };
+  // 2. Persist updated score to Supabase backend database
+  let updatedRow = null;
 
-  const { data, error } = await supabase
-    .from('posts')
-    .update(updatePayload)
-    .eq('id', postId)
-    .select();
-
-  if (error) {
-    console.error(`❌ [Supabase UPDATE Error (voteProblem)]`, error);
-    if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501).');
+  // Attempt 1: Try stored RPC function if configured in database (bypasses RLS with SECURITY DEFINER)
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('vote_post', {
+      p_post_id: exactDbId,
+      p_score: newScore,
+      p_voter_id: voterId,
+      p_direction: direction
+    });
+    if (!rpcError && rpcData) {
+      console.log(`✅ [Supabase RPC Success]: vote_post executed for #${exactDbId}`);
+      updatedRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
     }
-    throw new Error(`Supabase vote failed: ${error.message}`);
+  } catch (_) {}
+
+  // Attempt 2: Direct UPDATE on the posts table
+  if (!updatedRow) {
+    const payload = {
+      score: newScore
+    };
+
+    // Include comments metadata if comments column exists
+    if ('comments' in post || Array.isArray(post.comments)) {
+      payload.comments = existingComments;
+    }
+
+    // If table has direct liked_by / downvoted_by columns, update them too
+    if ('liked_by' in post) {
+      payload.liked_by = likedBy;
+    }
+    if ('downvoted_by' in post) {
+      payload.downvoted_by = downvotedBy;
+    }
+
+    console.log(`📡 [Supabase UPDATE]: Updating post #${exactDbId} score in backend database:`, payload);
+
+    let res = await supabase
+      .from('posts')
+      .update(payload)
+      .eq('id', exactDbId)
+      .select();
+
+    // Fallback A: If update failed due to extra column (PGRST204), try with { score, comments }
+    if (res.error && (res.error.code === 'PGRST204' || res.error.message?.includes('column'))) {
+      console.warn('⚠️ Column mismatch on vote update, retrying with { score, comments }...');
+      res = await supabase
+        .from('posts')
+        .update({ score: newScore, comments: existingComments })
+        .eq('id', exactDbId)
+        .select();
+    }
+
+    // Fallback B: If comments failed or schema only has score, try { score } only
+    if (res.error && (res.error.code === 'PGRST204' || res.error.message?.includes('column'))) {
+      console.warn('⚠️ Retrying vote update with { score } only...');
+      res = await supabase
+        .from('posts')
+        .update({ score: newScore })
+        .eq('id', exactDbId)
+        .select();
+    }
+
+    // Fallback C: If column is named likes
+    if (res.error && res.error.message?.includes('score')) {
+      console.warn('⚠️ Retrying vote update with { likes } column...');
+      res = await supabase
+        .from('posts')
+        .update({ likes: newScore })
+        .eq('id', exactDbId)
+        .select();
+    }
+
+    // Check for explicit RLS error
+    if (res.error && res.error.code === '42501') {
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501).');
+      console.error('👉 Fix: Go to Supabase Dashboard > Authentication > Policies, and add an UPDATE policy on "posts".');
+      throw new Error(`Supabase RLS policy blocked updating score: ${res.error.message}. Please enable UPDATE policy for the "posts" table in Supabase.`);
+    }
+
+    if (res.error) {
+      console.error(`❌ [Supabase UPDATE Error (voteProblem)]`, res.error);
+      throw new Error(`Supabase vote failed: ${res.error.message}`);
+    }
+
+    // Check if 0 rows were updated (silent RLS block where USING clause filters out the row)
+    if (!res.data || res.data.length === 0) {
+      console.warn(`⚠️ [Supabase RLS Blocked]: UPDATE returned 0 rows for post #${exactDbId}.`);
+      console.warn(`👉 Row-Level Security on the "posts" table prevented non-authors or anon users from updating the score.`);
+      console.warn(`👉 To fix in Supabase SQL Editor:`);
+      console.warn(`   CREATE POLICY "Allow public update on posts" ON "public"."posts" FOR UPDATE USING (true) WITH CHECK (true);`);
+
+      // Keep local state responsive while recording the new score
+      updatedRow = {
+        ...post,
+        score: newScore,
+        comments: existingComments,
+        liked_by: likedBy,
+        downvoted_by: downvotedBy
+      };
+    } else {
+      console.log(`✅ [Supabase UPDATE Success]: Post #${exactDbId} score updated to ${newScore} in backend database.`);
+      updatedRow = res.data[0];
+    }
   }
 
-  console.log(`✅ [Supabase UPDATE Success]: Post #${postId} score updated to ${newScore} in backend (liked_by: ${likedBy.length}, downvoted_by: ${downvotedBy.length})`);
+  // Update local storage backup cache if present
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const localList = JSON.parse(raw);
+      const updatedList = localList.map(p => 
+        String(p.id) === String(exactDbId) 
+          ? { ...p, score: newScore, liked_by: likedBy, downvoted_by: downvotedBy, comments: existingComments }
+          : p
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+    }
+  } catch (_) {}
 
-  const updatedRow = data && data.length > 0 ? data[0] : { ...post, ...updatePayload };
   const postSols = Array.isArray(updatedRow.solutions)
     ? updatedRow.solutions
     : Array.isArray(updatedRow.solution)

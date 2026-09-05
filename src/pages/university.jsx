@@ -58,8 +58,8 @@ function UniversityPage() {
         ? await postService.downvotePost(postId, account.id)
         : await postService.likePost(postId, account.id);
       if (updated) {
-        setPosts(prev => prev.map(p => p.id === postId ? updated : p));
-        if (selectedPost && selectedPost.id === postId) setSelectedPost(updated);
+        setPosts(prev => prev.map(p => String(p.id) === String(postId) ? updated : p));
+        if (selectedPost && String(selectedPost.id) === String(postId)) setSelectedPost(updated);
       }
       return updated;
     } catch (err) {
@@ -73,16 +73,16 @@ function UniversityPage() {
   const handleSubmitSolution = async (postId, solData) => {
     const updated = await postService.submitSolution(postId, solData);
     if (updated) {
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, solutions: updated.solutions } : p));
-      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, solutions: updated.solutions } : prev));
+      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, solutions: updated.solutions } : p));
+      if (selectedPost && String(selectedPost.id) === String(postId)) setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, solutions: updated.solutions } : prev));
     }
   };
 
   const handleToggleResolve = async (postId, newStatus) => {
     const updated = await postService.toggleProblemStatus(postId, newStatus, account);
     if (updated) {
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, status: updated.status } : p));
-      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, status: updated.status } : prev));
+      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, status: updated.status } : p));
+      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, status: updated.status } : prev));
     }
     return updated;
   };
@@ -95,16 +95,16 @@ function UniversityPage() {
       updated = await postService.updatePost(postId, updatedFields);
     }
     if (updated) {
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated } : p));
-      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated } : prev));
+      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated } : p));
+      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated } : prev));
     }
     return updated;
   };
 
   const handleDeleteProblem = async (postId) => {
     await postService.deletePost(postId);
-    setPosts(prev => prev.filter(p => p.id !== postId));
-    if (selectedPost && selectedPost.id === postId) {
+    setPosts(prev => prev.filter(p => String(p.id) !== String(postId)));
+    if (selectedPost && String(selectedPost.id) === String(postId)) {
       setSelectedPost(null);
     }
   };
@@ -112,8 +112,8 @@ function UniversityPage() {
   const handleDeleteSolution = async (postId, solutionId) => {
     const updated = await postService.deleteSolution(postId, solutionId, account);
     if (updated) {
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, solutions: updated.solutions, solution: updated.solutions } : p));
-      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, solutions: updated.solutions, solution: updated.solutions } : prev));
+      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, solutions: updated.solutions } : p));
+      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, solutions: updated.solutions } : prev));
     }
     return updated;
   };
@@ -121,8 +121,8 @@ function UniversityPage() {
   const handleAddComment = async (postId, commentData) => {
     const updated = await postService.addComment(postId, commentData, account);
     if (updated) {
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, comments: updated.comments } : p));
-      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, comments: updated.comments } : prev));
+      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, comments: updated.comments } : p));
+      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, comments: updated.comments } : prev));
     }
     return updated;
   };

@@ -270,13 +270,13 @@ export default function App() {
 
             <div className="lp-roles-grid">
               {[
-                { role: 'citizen',    label: 'Citizen',    color: '#22d3ee', delay: 1,
+                { role: 'citizen',    label: 'Citizen',    color: '#f472b6', delay: 1,
                   desc: 'Raise lived problems, add local context, and keep the work accountable to real community needs.',
                   icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-                { role: 'university', label: 'University', color: '#a78bfa', delay: 2,
+                { role: 'university', label: 'University', color: '#c084fc', delay: 2,
                   desc: 'Turn community questions into research, prototypes, and evidence people can actually use.',
                   icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg> },
-                { role: 'industry',   label: 'Industry',   color: '#34d399', delay: 3,
+                { role: 'industry',   label: 'Industry',   color: '#818cf8', delay: 3,
                   desc: 'Bring practical capacity, expertise, and responsible pathways to scale real solutions.',
                   icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg> },
               ].map(({ role, label, color, delay, desc, icon }) => (
