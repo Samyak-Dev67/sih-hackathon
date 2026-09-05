@@ -77,7 +77,7 @@ export function UniversityDashboard({
       {/* ========================================================================= */}
       {/* TAB 1: ACCEPTED CHALLENGES DASHBOARD (Matches User Reference Mockup)      */}
       {/* ========================================================================= */}
-      {activeTab === 'accepted' ? (
+      {activeTab === 'accepted' && (
         <div className="uni-workspace-dashboard">
           {/* Workspace Hero Banner */}
           <div className="uni-workspace-header-row">
