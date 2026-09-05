@@ -243,7 +243,7 @@ export function InteractivePlayground() {
             <span className="lp-web-pill">
               <span className="live-pulsing-dot" /> PROBLEM NETWORK WEB
             </span>
-            <span className="lp-web-hint">Click anywhere inside the box to weave new problems</span>
+            <span className="lp-web-hint">Click anywhere in the area to weave new problems</span>
           </div>
           <h2 className="lp-web-title">The Living Civic Constellation</h2>
           <p className="lp-web-subtitle">
@@ -251,68 +251,61 @@ export function InteractivePlayground() {
           </p>
         </div>
 
-        {/* The Interactive Floating Bubble Window */}
-        <div className="web-window">
-          {/* Top Bar - Cleaned: Red/Yellow/Green Mac dots removed */}
-          <div className="web-window-bar">
-            <div className="web-instruction-badge">
-              <span>Click anywhere inside to spawn & link problems</span>
-            </div>
-            <div className="web-stats-badge">
-              <span className="web-nodes-count">{nodes.length} Connected Issues</span>
-              <button type="button" onClick={handleReset} className="interactive-bar-btn" title="Reset Sandbox Web">
-                Reset Web ↺
-              </button>
-            </div>
+        {/* Seamless Interactive Floating Canvas */}
+        <div 
+          ref={containerRef}
+          className="web-seamless-canvas"
+          onClick={handleStageClick}
+        >
+          {/* Subtle Ambient Radial Glow */}
+          <div className="web-ambient-glow" />
+
+          {/* Top Floating Controls Overlay */}
+          <div className="web-canvas-controls">
+            <span className="web-nodes-count">{nodes.length} Connected Issues</span>
+            <span className="web-prompt-pill">Click anywhere in the open space to spawn and link problems</span>
+            <button type="button" onClick={handleReset} className="interactive-bar-btn" title="Reset Network">
+              Reset Web ↺
+            </button>
           </div>
 
-          {/* Floating Bubble Stage */}
-          <div 
-            ref={containerRef}
-            className="web-stage"
-            onClick={handleStageClick}
-          >
-            {/* Ambient Background Grid & Radial Glow */}
-            <div className="web-stage-grid" />
-            <div className="web-ambient-glow" />
+          {/* SVG Connecting Web Lines */}
+          <svg className="web-lines-svg">
+            <defs>
+              <linearGradient id="webLineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f472b6" stopOpacity="0.5" />
+                <stop offset="50%" stopColor="#c084fc" stopOpacity="0.35" />
+                <stop offset="100%" stopColor="#818cf8" stopOpacity="0.5" />
+              </linearGradient>
+            </defs>
+            {nodes.map((node) => {
+              if (!node.parentId) return null;
+              const parent = nodes.find((n) => n.id === node.parentId);
+              if (!parent) return null;
 
-            {/* SVG Connecting Web Lines */}
-            <svg className="web-lines-svg">
-              <defs>
-                <linearGradient id="webLineGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" stopColor="#f472b6" stopOpacity="0.5" />
-                  <stop offset="50%" stopColor="#c084fc" stopOpacity="0.35" />
-                  <stop offset="100%" stopColor="#818cf8" stopOpacity="0.5" />
-                </linearGradient>
-              </defs>
-              {nodes.map((node) => {
-                if (!node.parentId) return null;
-                const parent = nodes.find((n) => n.id === node.parentId);
-                if (!parent) return null;
-
-                return (
-                  <g key={`line-${node.id}-${parent.id}`}>
-                    <line
-                      x1={parent.x}
-                      y1={parent.y}
-                      x2={node.x}
-                      y2={node.y}
-                      stroke="url(#webLineGrad)"
-                      strokeWidth="1.5"
-                      strokeDasharray="3 3"
-                      className="pulsing-web-line"
-                    />
-                    <circle
-                      cx={(parent.x + node.x) / 2}
-                      cy={(parent.y + node.y) / 2}
-                      r="2"
-                      fill="#c084fc"
-                      className="web-signal-pulse"
-                    />
-                  </g>
-                );
-              })}
-            </svg>
+              return (
+                <g key={`line-${node.id}-${parent.id}`}>
+                  <line
+                    x1={parent.x}
+                    y1={parent.y}
+                    x2={node.x}
+                    y2={node.y}
+                    stroke="url(#webLineGrad)"
+                    strokeWidth="1.5"
+                    strokeDasharray="3 3"
+                    className="pulsing-web-line"
+                  />
+                  <circle
+                    cx={(parent.x + node.x) / 2}
+                    cy={(parent.y + node.y) / 2}
+                    r="2"
+                    fill="#c084fc"
+                    className="web-signal-pulse"
+                  />
+                </g>
+              );
+            })}
+          </svg>
 
             {/* Floating Bubble Nodes (Compact Size) */}
             {nodes.map((node) => {
@@ -347,11 +340,6 @@ export function InteractivePlayground() {
               );
             })}
 
-            {/* Quick Helper Floating Overlay Tag */}
-            <div className="web-helper-chip">
-              <span>Click anywhere to expand the floating web</span>
-            </div>
-
             {/* Selected Node Inspector Peek (Bottom Edge) */}
             {activeNode && (
               <div className="web-inspector-card" onClick={(e) => e.stopPropagation()}>
@@ -364,7 +352,6 @@ export function InteractivePlayground() {
                 <div className="inspector-title">{activeNode.text}</div>
               </div>
             )}
-          </div>
         </div>
       </div>
     </section>
