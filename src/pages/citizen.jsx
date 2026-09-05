@@ -191,10 +191,6 @@ function CitizenPage() {
           currentAccount={account}
           onVote={handleVote}
           onDownvote={handleDownvote}
-          onSubmitSolution={handleSubmitSolution}
-          onDeleteSolution={handleDeleteSolution}
-          onAddComment={handleAddComment}
-          onDeleteComment={handleDeleteComment}
           onUpdateProblem={handleUpdateProblem}
           onDeleteProblem={handleDeleteProblem}
           onToggleResolve={handleToggleResolve}

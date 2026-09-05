@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { isPostAuthor, getPostAuthorInfo, getPostStatus, formatRelativeTime } from '../services/api';
+import { isPostAuthor, getPostAuthorInfo, getPostStatus, formatRelativeTime, getChallengeWorkspace } from '../services/api';
 
 export function ProblemCard({ 
   post, 
@@ -9,7 +9,8 @@ export function ProblemCard({
   currentAccountId,
   currentAccount,
   onDeleteProblem,
-  onToggleResolve
+  onToggleResolve,
+  onOpenWorkspace
 }) {
   const {
     id,
@@ -21,21 +22,10 @@ export function ProblemCard({
     created_at,
     liked_by = [],
     downvoted_by = [],
-    solutions = [],
-    solution = [],
-    comments = [],
     resolved = false
   } = post;
 
-  const postSolutions = Array.isArray(solutions) && solutions.length > 0
-    ? solutions
-    : Array.isArray(solution)
-      ? solution
-      : [];
-
-  const validComments = (Array.isArray(comments) ? comments : []).filter(
-    c => c && typeof c === 'object' && !c.__meta && (c.text || c.comment)
-  );
+  const acceptedClaim = getChallengeWorkspace(id);
 
   const accountObj = currentAccount || (currentAccountId ? { id: currentAccountId } : null);
   const isAuthor = isPostAuthor(post, accountObj);
@@ -143,7 +133,9 @@ export function ProblemCard({
           </div>
 
           <div className="status-container" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-            {isResolved ? (
+            {acceptedClaim ? (
+              <span className="tag-pill status-accepted-badge">ACCEPTED</span>
+            ) : isResolved ? (
               <span className="tag-pill status-resolved-badge">RESOLVED</span>
             ) : (
               <span className="tag-pill status-open-badge">OPEN</span>
@@ -195,31 +187,20 @@ export function ProblemCard({
           </div>
         )}
 
-        {/* Solutions section directly visible under the problem post */}
-        {postSolutions && postSolutions.length > 0 && (
-          <div className="card-solutions-preview-box">
-            <div className="card-solutions-preview-header">
-              <span className="card-solutions-pill">
-                {postSolutions.length} {postSolutions.length === 1 ? 'Solution Submitted' : 'Solutions Submitted'}
+        {/* Research Progress Bar (dictated by university milestones) */}
+        {acceptedClaim && (
+          <div className="card-accepted-progress-block">
+            <div className="card-progress-top">
+              <span className="card-progress-label">
+                Research Progress • {acceptedClaim.universityName}
               </span>
-              <span className="card-solutions-view-hint">Click card to review details →</span>
+              <span className="card-progress-pct">{acceptedClaim.progress || 0}%</span>
             </div>
-            <div className="card-solutions-mini-list">
-              {postSolutions.map((sol, sIdx) => (
-                <div key={sol.id || sIdx} className="card-solution-mini-item">
-                  <div className="card-solution-mini-top">
-                    <span className={`role-badge-tag ${sol.author_role === 'university' ? 'badge-uni' : 'badge-inds'}`}>
-                      {(sol.author_role || 'PARTNER').toUpperCase()}
-                    </span>
-                    <strong className="card-solution-mini-author">{sol.author_name}</strong>
-                    {sol.created_at && (
-                      <span className="card-solution-mini-date">• {formatRelativeTime(sol.created_at)}</span>
-                    )}
-                  </div>
-                  <h4 className="card-solution-mini-title">{sol.title}</h4>
-                  <p className="card-solution-mini-snippet">{sol.proposed_approach || sol.desc}</p>
-                </div>
-              ))}
+            <div className="card-progress-track">
+              <div 
+                className="card-progress-bar"
+                style={{ width: `${Math.min(acceptedClaim.progress || 0, 100)}%` }}
+              />
             </div>
           </div>
         )}
@@ -230,21 +211,36 @@ export function ProblemCard({
             <span className="tag-pill">ID #{id}</span>
             <span className="tag-pill">Score: {score}</span>
             {isResolved && <span className="tag-pill resolved-tag">Resolved by Citizen</span>}
+            {acceptedClaim?.fundedByIndustry && (
+              <span className="tag-pill" style={{ background: 'rgba(129, 140, 248, 0.12)', color: '#818cf8', border: '1px solid rgba(129, 140, 248, 0.3)', fontWeight: 600 }}>
+                Funded by {acceptedClaim.fundedByIndustry.name}
+              </span>
+            )}
           </div>
 
-          {/* Solutions & Comments indicators */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div className="solutions-indicator" title="Submitted solutions">
-              <span className="solutions-count-text">
-                {postSolutions.length} {postSolutions.length === 1 ? 'Solution' : 'Solutions'}
-              </span>
-            </div>
-            <div className="solutions-indicator" title="Citizen comments">
-              <span className="solutions-count-text">
-                {validComments.length} {validComments.length === 1 ? 'Comment' : 'Comments'}
-              </span>
-            </div>
-          </div>
+          {acceptedClaim && (
+            <>
+              {acceptedClaim.universityId === currentAccount?.id || acceptedClaim.universityId === 'demo-uni' ? (
+                onOpenWorkspace && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenWorkspace(id);
+                    }}
+                    style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem', whiteSpace: 'nowrap' }}
+                  >
+                    Manage Problem →
+                  </button>
+                )
+              ) : currentAccount?.role === 'university' ? (
+                <span className="tag-pill badge-locked" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
+                  Locked • {acceptedClaim.universityName}
+                </span>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
     </div>

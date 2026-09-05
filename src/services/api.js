@@ -1,4 +1,4 @@
-import { INITIAL_POSTS } from '../data/mockData.js';
+import { INITIAL_POSTS, INITIAL_ACCEPTED_CHALLENGES } from '../data/mockData.js';
 import { supabase } from '../utils/supabase.js';
 import { filterProblems } from '../utils/search.js';
 
@@ -1495,6 +1495,195 @@ export async function getSolutions(postId) {
 }
 
 /**
+ * ==============================================================================
+ * UNIVERSITY WORKSPACE & ACCEPTED CHALLENGES SERVICE
+ * ==============================================================================
+ */
+const ACCEPTED_CHALLENGES_KEY = 'fl_accepted_challenges';
+
+export function getAcceptedChallenges(universityId = null) {
+  try {
+    const raw = localStorage.getItem(ACCEPTED_CHALLENGES_KEY);
+    let list = raw ? JSON.parse(raw) : INITIAL_ACCEPTED_CHALLENGES;
+    if (!raw) {
+      localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(INITIAL_ACCEPTED_CHALLENGES));
+    }
+    if (universityId) {
+      return list.filter(c => c.universityId === universityId || c.universityId === 'demo-uni');
+    }
+    return list;
+  } catch (e) {
+    return INITIAL_ACCEPTED_CHALLENGES;
+  }
+}
+
+export function saveAcceptedChallenges(list) {
+  try {
+    localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error('Failed to save accepted challenges:', e);
+  }
+}
+
+export function calculateProgress(milestones) {
+  if (!Array.isArray(milestones) || milestones.length === 0) return 0;
+  const completed = milestones.filter(m => m.completed).length;
+  return Math.round((completed / milestones.length) * 100);
+}
+
+export function acceptChallenge(post, universityAccount) {
+  if (!post || !universityAccount) return null;
+  const list = getAcceptedChallenges();
+  const existing = list.find(c => String(c.postId) === String(post.id));
+  if (existing) {
+    return existing;
+  }
+
+  const initialMilestones = [
+    { id: `m-${Date.now()}-1`, title: 'Phase 1: Field Investigation & Scope Definition', deadline: 'Jan 30, 2027', completed: false },
+    { id: `m-${Date.now()}-2`, title: 'Phase 2: Prototype Development & Testing', deadline: 'Mar 15, 2027', completed: false }
+  ];
+
+  const newClaim = {
+    id: `ac-${Date.now()}`,
+    postId: post.id,
+    title: post.title,
+    category: post.category || 'Infrastructure',
+    milestoneDeadline: 'Jan 30, 2027',
+    milestones: initialMilestones,
+    progress: calculateProgress(initialMilestones),
+    team: [
+      { name: universityAccount.name || 'Faculty Lead', initials: (universityAccount.initials || 'FL') }
+    ],
+    universityId: universityAccount.id,
+    universityName: universityAccount.name || 'University Research Lab',
+    fundedByIndustry: null,
+    status: 'In Progress',
+    acceptedAt: new Date().toISOString()
+  };
+
+  const updated = [newClaim, ...list];
+  saveAcceptedChallenges(updated);
+  return newClaim;
+}
+
+export function addMilestone(postId, milestoneData) {
+  if (!postId || !milestoneData || !milestoneData.title?.trim()) return null;
+  const list = getAcceptedChallenges();
+  const updated = list.map(c => {
+    if (String(c.postId) === String(postId)) {
+      const currentMilestones = c.milestones || [];
+      const newM = {
+        id: `m-${Date.now()}`,
+        title: milestoneData.title.trim(),
+        deadline: milestoneData.deadline || 'TBD',
+        completed: false
+      };
+      const newMilestones = [...currentMilestones, newM];
+      return {
+        ...c,
+        milestones: newMilestones,
+        progress: calculateProgress(newMilestones),
+        milestoneDeadline: milestoneData.deadline || c.milestoneDeadline
+      };
+    }
+    return c;
+  });
+  saveAcceptedChallenges(updated);
+  return updated.find(c => String(c.postId) === String(postId));
+}
+
+export function toggleMilestone(postId, milestoneId) {
+  if (!postId || !milestoneId) return null;
+  const list = getAcceptedChallenges();
+  const updated = list.map(c => {
+    if (String(c.postId) === String(postId)) {
+      const currentMilestones = c.milestones || [];
+      const newMilestones = currentMilestones.map(m => 
+        m.id === milestoneId ? { ...m, completed: !m.completed } : m
+      );
+      return {
+        ...c,
+        milestones: newMilestones,
+        progress: calculateProgress(newMilestones)
+      };
+    }
+    return c;
+  });
+  saveAcceptedChallenges(updated);
+  return updated.find(c => String(c.postId) === String(postId));
+}
+
+export function deleteMilestone(postId, milestoneId) {
+  if (!postId || !milestoneId) return null;
+  const list = getAcceptedChallenges();
+  const updated = list.map(c => {
+    if (String(c.postId) === String(postId)) {
+      const currentMilestones = c.milestones || [];
+      const newMilestones = currentMilestones.filter(m => m.id !== milestoneId);
+      return {
+        ...c,
+        milestones: newMilestones,
+        progress: calculateProgress(newMilestones)
+      };
+    }
+    return c;
+  });
+  saveAcceptedChallenges(updated);
+  return updated.find(c => String(c.postId) === String(postId));
+}
+
+export function isProblemLocked(postId) {
+  if (!postId) return false;
+  const list = getAcceptedChallenges();
+  return list.some(c => String(c.postId) === String(postId));
+}
+
+export function fundChallenge(postId, industryAccount) {
+  if (!postId || !industryAccount) return null;
+  const list = getAcceptedChallenges();
+  const updated = list.map(c => {
+    if (String(c.postId) === String(postId)) {
+      return {
+        ...c,
+        fundedByIndustry: {
+          id: industryAccount.id,
+          name: industryAccount.name || 'Industry Sponsor',
+          fundedAt: new Date().toISOString()
+        }
+      };
+    }
+    return c;
+  });
+  saveAcceptedChallenges(updated);
+  return updated.find(c => String(c.postId) === String(postId));
+}
+
+export function canAccessWorkspace(postId, account) {
+  if (!postId || !account) return false;
+  const list = getAcceptedChallenges();
+  const claim = list.find(c => String(c.postId) === String(postId));
+  if (!claim) return false;
+
+  // University check: Only the university that accepted it
+  if (account.role === 'university') {
+    return claim.universityId === account.id || claim.universityId === 'demo-uni';
+  }
+
+  // Industry check: Exclusively visible if industry accepts to fund it
+  if (account.role === 'industry') {
+    return claim.fundedByIndustry && (claim.fundedByIndustry.id === account.id || claim.fundedByIndustry.id === 'ind-1');
+  }
+
+  return false;
+}
+
+export function getChallengeWorkspace(postId) {
+  const list = getAcceptedChallenges();
+  return list.find(c => String(c.postId) === String(postId)) || null;
+}
+
+/**
  * Combined API Service Object
  */
 export const postService = {
@@ -1527,7 +1716,17 @@ export const postService = {
   deleteSolution,
   getSolutions,
   isSolutionAuthor,
-  filterProblems
+  filterProblems,
+  getAcceptedChallenges,
+  acceptChallenge,
+  fundChallenge,
+  canAccessWorkspace,
+  getChallengeWorkspace,
+  calculateProgress,
+  addMilestone,
+  toggleMilestone,
+  deleteMilestone,
+  isProblemLocked
 };
 
 export { filterProblems };

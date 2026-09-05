@@ -9,7 +9,8 @@ export function IndustryDashboard({
   onDownvote, 
   onSelectPost,
   searchQuery: propSearchQuery,
-  onSearchChange: propOnSearchChange
+  onSearchChange: propOnSearchChange,
+  onOpenWorkspace
 }) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [localSearch, setLocalSearch] = useState('');
@@ -138,6 +139,7 @@ export function IndustryDashboard({
                   onSelectPost={onSelectPost}
                   currentAccountId={currentAccount?.id}
                   currentAccount={currentAccount}
+                  onOpenWorkspace={onOpenWorkspace}
                 />
               ))
             )}

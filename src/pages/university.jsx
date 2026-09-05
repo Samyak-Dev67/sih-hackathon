@@ -4,6 +4,7 @@ import { Navbar } from '../components/Navbar';
 import { AuthGuard } from '../components/AuthGuard';
 import { UniversityDashboard } from '../components/UniversityDashboard';
 import { ProblemDetailModal } from '../components/ProblemDetailModal';
+import { ProblemWorkspace } from '../components/ProblemWorkspace';
 import { postService } from '../services/api';
 import { supabase } from '../utils/supabase';
 import '../index.css';
@@ -11,7 +12,7 @@ import '../index.css';
 function UniversityPage() {
   const [theme, setTheme] = useState(() => localStorage.getItem('fl_theme') || 'dark');
   
-  // Strictly null if not logged in (NO automatic demo account fallback!)
+  // Strictly null if not logged in
   const [account, setAccount] = useState(() => {
     const saved = localStorage.getItem('fl_active_account');
     return saved ? JSON.parse(saved) : null;
@@ -22,6 +23,12 @@ function UniversityPage() {
   const [searchQuery, setSearchQuery] = useState(() => {
     const p = new URLSearchParams(window.location.search);
     return p.get('search') || p.get('q') || '';
+  });
+
+  // Dedicated workspace view state
+  const [activeWorkspacePostId, setActiveWorkspacePostId] = useState(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get('workspace') || null;
   });
 
   useEffect(() => {
@@ -70,14 +77,6 @@ function UniversityPage() {
 
   const handleDownvote = (postId) => handleVote(postId, 'down');
 
-  const handleSubmitSolution = async (postId, solData) => {
-    const updated = await postService.submitSolution(postId, solData);
-    if (updated) {
-      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, solutions: updated.solutions } : p));
-      if (selectedPost && String(selectedPost.id) === String(postId)) setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, solutions: updated.solutions } : prev));
-    }
-  };
-
   const handleToggleResolve = async (postId, newStatus) => {
     const updated = await postService.toggleProblemStatus(postId, newStatus, account);
     if (updated) {
@@ -109,32 +108,27 @@ function UniversityPage() {
     }
   };
 
-  const handleDeleteSolution = async (postId, solutionId) => {
-    const updated = await postService.deleteSolution(postId, solutionId, account);
-    if (updated) {
-      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, solutions: updated.solutions } : p));
-      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, solutions: updated.solutions } : prev));
-    }
-    return updated;
+  // University workspace claim handler
+  const handleAcceptChallenge = (post) => {
+    if (!account) return;
+    postService.acceptChallenge(post, account);
+    setActiveWorkspacePostId(post.id);
+    setSelectedPost(null);
   };
 
-  const handleAddComment = async (postId, commentData) => {
-    const updated = await postService.addComment(postId, commentData, account);
-    if (updated) {
-      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, comments: updated.comments } : p));
-      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, comments: updated.comments } : prev));
-    }
-    return updated;
+  const handleOpenWorkspace = (postId) => {
+    setActiveWorkspacePostId(postId);
+    setSelectedPost(null);
   };
 
-  const handleDeleteComment = async (postId, commentId) => {
-    const updated = await postService.deleteComment(postId, commentId, account);
-    if (updated) {
-      setPosts(prev => prev.map(p => p.id === postId ? { ...p, ...updated, comments: updated.comments } : p));
-      setSelectedPost(prev => (prev && prev.id === postId ? { ...prev, ...updated, comments: updated.comments } : prev));
-    }
-    return updated;
+  const handleCloseWorkspace = () => {
+    setActiveWorkspacePostId(null);
+    const url = new URL(window.location);
+    url.searchParams.delete('workspace');
+    window.history.pushState({}, '', url);
   };
+
+  const activeWorkspacePost = posts.find(p => String(p.id) === String(activeWorkspacePostId));
 
   return (
     <div className="app-shell">
@@ -150,32 +144,41 @@ function UniversityPage() {
       />
       <main className="app-main-viewport">
         <AuthGuard expectedRole="university" currentAccount={account}>
-          <UniversityDashboard 
-            currentAccount={account}
-            posts={posts}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            onVote={handleVote}
-            onDownvote={handleDownvote}
-            onSelectPost={(post) => setSelectedPost(post)}
-            onToggleResolve={handleToggleResolve}
-          />
+          {activeWorkspacePostId ? (
+            <ProblemWorkspace 
+              postId={activeWorkspacePostId}
+              post={activeWorkspacePost}
+              currentAccount={account}
+              onBack={handleCloseWorkspace}
+            />
+          ) : (
+            <UniversityDashboard 
+              currentAccount={account}
+              posts={posts}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              onVote={handleVote}
+              onDownvote={handleDownvote}
+              onSelectPost={(post) => setSelectedPost(post)}
+              onToggleResolve={handleToggleResolve}
+              onOpenWorkspace={handleOpenWorkspace}
+              onAcceptChallenge={handleAcceptChallenge}
+            />
+          )}
         </AuthGuard>
       </main>
-      {account && account.role === 'university' && (
+      {account && account.role === 'university' && !activeWorkspacePostId && (
         <ProblemDetailModal 
           post={selectedPost}
           onClose={() => setSelectedPost(null)}
           currentAccount={account}
           onVote={handleVote}
           onDownvote={handleDownvote}
-          onSubmitSolution={handleSubmitSolution}
-          onDeleteSolution={handleDeleteSolution}
-          onAddComment={handleAddComment}
-          onDeleteComment={handleDeleteComment}
           onUpdateProblem={handleUpdateProblem}
           onDeleteProblem={handleDeleteProblem}
           onToggleResolve={handleToggleResolve}
+          onAcceptChallenge={handleAcceptChallenge}
+          onOpenWorkspace={handleOpenWorkspace}
         />
       )}
     </div>

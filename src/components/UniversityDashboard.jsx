@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ProblemCard } from './ProblemCard';
 import { CATEGORIES } from '../data/mockData';
+import { getAcceptedChallenges } from '../services/api';
 
 export function UniversityDashboard({ 
   currentAccount, 
@@ -9,17 +10,22 @@ export function UniversityDashboard({
   onDownvote,
   onSelectPost,
   searchQuery: propSearchQuery,
-  onSearchChange: propOnSearchChange
+  onSearchChange: propOnSearchChange,
+  onOpenWorkspace,
+  onAcceptChallenge
 }) {
+  const [activeTab, setActiveTab] = useState('accepted'); // 'accepted' | 'discover'
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [localSearch, setLocalSearch] = useState('');
 
+  // Fetch accepted challenges for this university
+  const acceptedList = getAcceptedChallenges(currentAccount?.id);
+
   const activeSearch = propSearchQuery !== undefined ? propSearchQuery : localSearch;
   const setActiveSearch = propOnSearchChange || setLocalSearch;
-
   const cleanQ = (activeSearch || '').toLowerCase().trim();
 
-  // As you type only problems which match the title remain, others disappear; when empty, show all results
+  // Filter open problems for the discover tab
   const filteredPosts = posts.filter(post => {
     if (selectedCategory !== 'All' && (post.category || '').toLowerCase() !== selectedCategory.toLowerCase()) {
       return false;
@@ -35,115 +41,247 @@ export function UniversityDashboard({
 
   return (
     <div className="dashboard-container">
-      {/* University Banner */}
-      <div className="dashboard-welcome-banner university-banner">
-        <div className="banner-text-content">
-          <span className="banner-role-pill">UNIVERSITY PORTAL</span>
-          <h2>Connect Academic Research with Real-World Community Needs</h2>
-          <p>
-            Engage faculty laboratories and student teams on real-world citizen problems.
-            Select a problem to analyze and submit structured academic solutions.
-          </p>
-        </div>
-        <div className="banner-stats-strip">
-          <div className="banner-stat-box">
-            <span className="stat-number">{posts.length}</span>
-            <span className="stat-desc">Citizen Problems</span>
-          </div>
-        </div>
+      {/* Top University Navigation Tabs */}
+      <div className="uni-subnav-bar">
+        <button
+          type="button"
+          className={`uni-nav-tab-btn ${activeTab === 'accepted' ? 'active' : ''}`}
+          onClick={() => setActiveTab('accepted')}
+        >
+          Accepted Challenges ({acceptedList.length})
+        </button>
+        <button
+          type="button"
+          className={`uni-nav-tab-btn ${activeTab === 'discover' ? 'active' : ''}`}
+          onClick={() => setActiveTab('discover')}
+        >
+          Discover Open Problems ({posts.length})
+        </button>
       </div>
 
-      <div className="dashboard-layout-grid">
-        {/* Left Filter Sidebar */}
-        <aside className="dashboard-sidebar">
-          <div className="sidebar-widget">
-            <h4 className="widget-title">Research Categories</h4>
-            <div className="category-filter-list">
-              {CATEGORIES.map((cat) => {
-                const count = cat === 'All' 
-                  ? posts.length 
-                  : posts.filter(p => (p.category || '').toLowerCase() === cat.toLowerCase()).length;
-                return (
-                  <button 
-                    key={cat}
-                    className={`filter-item-btn ${selectedCategory === cat ? 'active' : ''}`}
-                    onClick={() => setSelectedCategory(cat)}
-                  >
-                    <span>{cat}</span>
-                    <span className="filter-count-badge">{count}</span>
-                  </button>
-                );
-              })}
+      {/* ========================================================================= */}
+      {/* TAB 1: ACCEPTED CHALLENGES DASHBOARD (Matches User Reference Mockup)      */}
+      {/* ========================================================================= */}
+      {activeTab === 'accepted' ? (
+        <div className="uni-workspace-dashboard">
+          {/* Workspace Hero Banner */}
+          <div className="uni-workspace-header-row">
+            <div>
+              <h1 className="uni-workspace-title">
+                Workspace: {currentAccount?.name || 'University Research Lab'}
+              </h1>
+              <p className="uni-workspace-subtitle">
+                Coordinate active engineering solutions, manage milestones, and view expert claims.
+              </p>
             </div>
+            <button
+              type="button"
+              className="btn btn-blue uni-explore-btn"
+              onClick={() => setActiveTab('discover')}
+            >
+              Explore Open Problems
+            </button>
           </div>
-        </aside>
 
-        {/* Main Feed Column */}
-        <section className="dashboard-feed-column">
-          <div className="feed-header-controls">
-            <div className="feed-tabs-row">
-              <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-primary)' }}>
-                Discover Citizen Problems ({filteredPosts.length})
+          {/* 3 Metric Cards (Community Impact Score was excluded per red X) */}
+          <div className="uni-metrics-grid">
+            <div className="uni-metric-card">
+              <span className="uni-metric-label">ACTIVE CLAIMS</span>
+              <span className="uni-metric-value text-blue">{acceptedList.length}</span>
+            </div>
+
+            <div className="uni-metric-card">
+              <span className="uni-metric-label">IN PROGRESS MILESTONES</span>
+              <span className="uni-metric-value text-orange">
+                {acceptedList.length > 0 ? acceptedList.length * 2 : 0}
               </span>
             </div>
 
-            <div className="feed-search-box">
-              <input 
-                type="text"
-                placeholder="Filter problems by title..."
-                value={activeSearch}
-                onChange={(e) => setActiveSearch(e.target.value)}
-                className="feed-search-input"
-              />
-              {activeSearch && (
-                <button 
-                  type="button" 
-                  className="feed-search-clear-btn" 
-                  onClick={() => setActiveSearch('')}
-                  title="Clear search"
-                >
-                  ✕
-                </button>
-              )}
+            <div className="uni-metric-card">
+              <span className="uni-metric-label">COMPLETED SOLUTIONS</span>
+              <span className="uni-metric-value text-green">8</span>
             </div>
           </div>
 
-          <div className="problems-feed-stream">
-            {filteredPosts.length === 0 ? (
-              <div className="empty-feed-card">
-                <h3>No citizen problems found</h3>
+          {/* Challenges I am Working On Section */}
+          <div className="uni-challenges-section">
+            <h2 className="uni-section-heading">Challenges I am Working On</h2>
+
+            {acceptedList.length === 0 ? (
+              <div className="empty-accepted-box">
+                <h3>No Accepted Challenges Yet</h3>
                 <p>
-                  {activeSearch || selectedCategory !== 'All'
-                    ? `No problems match title "${activeSearch}".`
-                    : 'Check back soon or adjust your category search.'}
+                  Your university laboratory hasn't taken up any citizen problems yet.
+                  Explore open civic challenges and accept them to launch dedicated workspaces.
                 </p>
-                {(activeSearch || selectedCategory !== 'All') && (
+                <button
+                  type="button"
+                  className="btn btn-blue"
+                  style={{ marginTop: '0.75rem' }}
+                  onClick={() => setActiveTab('discover')}
+                >
+                  Browse Open Citizen Problems
+                </button>
+              </div>
+            ) : (
+              <div className="uni-challenges-list">
+                {acceptedList.map((challenge) => (
+                  <div key={challenge.id} className="uni-challenge-card">
+                    {/* Card Top Row: Category + Milestone Deadline */}
+                    <div className="uni-challenge-top-row">
+                      <span className="tag-pill category-tag">{challenge.category}</span>
+                      <span className="uni-milestone-deadline">
+                        Milestone Deadline: {challenge.milestoneDeadline}
+                      </span>
+                    </div>
+
+                    {/* Problem Title */}
+                    <h3 className="uni-challenge-title">{challenge.title}</h3>
+
+                    {/* Progress Row */}
+                    <div className="uni-progress-block">
+                      <div className="uni-progress-header">
+                        <span className="uni-progress-label">Overall Completion Progress</span>
+                        <span className="uni-progress-pct">{challenge.progress || 15}%</span>
+                      </div>
+                      <div className="uni-progress-track">
+                        <div 
+                          className="uni-progress-bar"
+                          style={{ width: `${Math.min(challenge.progress || 15, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Team Assigned + Manage Problem Button */}
+                    <div className="uni-challenge-footer-row">
+                      <div className="uni-team-assigned-block">
+                        <span className="uni-team-label">Team Assigned:</span>
+                        <div className="uni-team-avatars-row">
+                          {(challenge.team || [{ name: 'Lead', initials: 'FL' }]).map((member, mIdx) => (
+                            <div 
+                              key={mIdx} 
+                              className="uni-team-avatar-circle" 
+                              title={member.name}
+                            >
+                              {member.initials}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="uni-card-action-group">
+                        <button
+                          type="button"
+                          className="btn btn-outline uni-manage-btn"
+                          onClick={() => onOpenWorkspace && onOpenWorkspace(challenge.postId)}
+                        >
+                          Manage Solution
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* ========================================================================= */
+        /* TAB 2: DISCOVER OPEN PROBLEMS (Open Civic Challenges Catalog)             */
+        /* ========================================================================= */
+        <div className="dashboard-layout-grid">
+          {/* Left Category Filter Sidebar */}
+          <aside className="dashboard-sidebar">
+            <div className="sidebar-widget">
+              <h4 className="widget-title">Research Categories</h4>
+              <div className="category-filter-list">
+                {CATEGORIES.map((cat) => {
+                  const count = cat === 'All' 
+                    ? posts.length 
+                    : posts.filter(p => (p.category || '').toLowerCase() === cat.toLowerCase()).length;
+                  return (
+                    <button 
+                      key={cat}
+                      className={`filter-item-btn ${selectedCategory === cat ? 'active' : ''}`}
+                      onClick={() => setSelectedCategory(cat)}
+                    >
+                      <span>{cat}</span>
+                      <span className="filter-count-badge">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </aside>
+
+          {/* Main Feed Column */}
+          <section className="dashboard-feed-column">
+            <div className="feed-header-controls">
+              <div className="feed-tabs-row">
+                <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+                  Discover Open Problems ({filteredPosts.length})
+                </span>
+              </div>
+
+              <div className="feed-search-box">
+                <input 
+                  type="text"
+                  placeholder="Filter problems by title..."
+                  value={activeSearch}
+                  onChange={(e) => setActiveSearch(e.target.value)}
+                  className="feed-search-input"
+                />
+                {activeSearch && (
                   <button 
-                    type="button"
-                    className="btn btn-outline"
-                    onClick={() => { setActiveSearch(''); setSelectedCategory('All'); }}
-                    style={{ marginTop: '0.5rem' }}
+                    type="button" 
+                    className="feed-search-clear-btn" 
+                    onClick={() => setActiveSearch('')}
+                    title="Clear search"
                   >
-                    Reset Search Filters
+                    ✕
                   </button>
                 )}
               </div>
-            ) : (
-              filteredPosts.map((post) => (
-                <ProblemCard 
-                  key={post.id}
-                  post={post}
-                  onVote={onVote}
-                  onDownvote={onDownvote}
-                  onSelectPost={onSelectPost}
-                  currentAccountId={currentAccount?.id}
-                  currentAccount={currentAccount}
-                />
-              ))
-            )}
-          </div>
-        </section>
-      </div>
+            </div>
+
+            <div className="problems-feed-stream">
+              {filteredPosts.length === 0 ? (
+                <div className="empty-feed-card">
+                  <h3>No citizen problems found</h3>
+                  <p>
+                    {activeSearch || selectedCategory !== 'All'
+                      ? `No problems match title "${activeSearch}".`
+                      : 'Check back soon or adjust your category search.'}
+                  </p>
+                  {(activeSearch || selectedCategory !== 'All') && (
+                    <button 
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => { setActiveSearch(''); setSelectedCategory('All'); }}
+                      style={{ marginTop: '0.5rem' }}
+                    >
+                      Reset Search Filters
+                    </button>
+                  )}
+                </div>
+              ) : (
+                filteredPosts.map((post) => (
+                  <ProblemCard 
+                    key={post.id}
+                    post={post}
+                    onVote={onVote}
+                    onDownvote={onDownvote}
+                    onSelectPost={onSelectPost}
+                    currentAccountId={currentAccount?.id}
+                    currentAccount={currentAccount}
+                    onOpenWorkspace={onOpenWorkspace}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
