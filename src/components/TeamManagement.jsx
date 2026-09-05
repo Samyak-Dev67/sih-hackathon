@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   getUniversityStudents,
   getUniversityTeams,
+  getAcceptedChallenges,
   addUniversityStudent,
   updateUniversityStudent,
   deleteUniversityStudent,
@@ -32,6 +33,8 @@ export function TeamManagement({
   const [subTab, setSubTab] = useState('teams'); // 'teams' | 'students'
   const [teams, setTeams] = useState(() => getUniversityTeams(universityId));
   const [students, setStudents] = useState(() => getUniversityStudents(universityId));
+  const [acceptedChallenges, setAcceptedChallenges] = useState(() => getAcceptedChallenges(universityId));
+  const [activePickerTeamId, setActivePickerTeamId] = useState(null);
 
   // Search filters
   const [teamSearch, setTeamSearch] = useState('');
@@ -64,7 +67,10 @@ export function TeamManagement({
   const reloadData = () => {
     setTeams(getUniversityTeams(universityId));
     setStudents(getUniversityStudents(universityId));
+    setAcceptedChallenges(getAcceptedChallenges(universityId));
   };
+
+  const availableAcceptedChallenges = acceptedChallenges.length > 0 ? acceptedChallenges : acceptedProblems;
 
   useEffect(() => {
     reloadData();
@@ -323,7 +329,7 @@ export function TeamManagement({
               {filteredTeams.map((team) => {
                 const teamStudents = students.filter(s => (team.studentIds || []).includes(s.id));
                 const teamProblemIds = team.assignedProblemIds || [];
-                const assignedChallenges = acceptedProblems.filter(p =>
+                const assignedChallenges = availableAcceptedChallenges.filter(p =>
                   teamProblemIds.some(id => String(id) === String(p.postId))
                 );
 
@@ -367,13 +373,23 @@ export function TeamManagement({
                         <span className="team-section-subheading">
                           Assigned Challenges ({assignedChallenges.length})
                         </span>
-                        <button
-                          type="button"
-                          className="btn-link-action"
-                          onClick={() => setAssigningTeam(team)}
-                        >
-                          Manage Assignments →
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="btn-link-action"
+                            onClick={() => setActivePickerTeamId(activePickerTeamId === team.id ? null : team.id)}
+                          >
+                            {activePickerTeamId === team.id ? 'Close Options ✕' : '+ Add Problems'}
+                          </button>
+                          <span style={{ color: 'var(--text-muted)' }}>|</span>
+                          <button
+                            type="button"
+                            className="btn-link-action"
+                            onClick={() => setAssigningTeam(team)}
+                          >
+                            Manage All →
+                          </button>
+                        </div>
                       </div>
 
                       {assignedChallenges.length === 0 ? (
@@ -382,10 +398,10 @@ export function TeamManagement({
                           <button
                             type="button"
                             className="btn btn-outline btn-sm"
-                            onClick={() => setAssigningTeam(team)}
+                            onClick={() => setActivePickerTeamId(activePickerTeamId === team.id ? null : team.id)}
                             style={{ marginTop: '0.4rem' }}
                           >
-                            + Assign Problems
+                            {activePickerTeamId === team.id ? 'Close Problem Options' : '+ Add Problems from Accepted'}
                           </button>
                         </div>
                       ) : (
@@ -396,15 +412,101 @@ export function TeamManagement({
                                 <span className="tag-pill category-tag-xs">{challenge.category}</span>
                                 <span className="team-problem-title-text">{challenge.title}</span>
                               </div>
-                              <button
-                                type="button"
-                                className="btn-table-workspace"
-                                onClick={() => onOpenWorkspace && onOpenWorkspace(challenge.postId)}
-                              >
-                                Workspace →
-                              </button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <button
+                                  type="button"
+                                  className="btn-table-workspace"
+                                  onClick={() => onOpenWorkspace && onOpenWorkspace(challenge.postId)}
+                                >
+                                  Workspace →
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-unassign-chip"
+                                  title="Unassign problem from this team"
+                                  onClick={() => handleToggleProblem(team.id, challenge.postId)}
+                                >
+                                  ✕
+                                </button>
+                              </div>
                             </div>
                           ))}
+                          <div style={{ marginTop: '0.4rem' }}>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              onClick={() => setActivePickerTeamId(activePickerTeamId === team.id ? null : team.id)}
+                            >
+                              {activePickerTeamId === team.id ? 'Close Problem Options' : '+ Add More Problems'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* INLINE PROBLEM OPTIONS PICKER: Displays options from which problems the university accepted */}
+                      {activePickerTeamId === team.id && (
+                        <div className="inline-problem-picker-card">
+                          <div className="picker-header-row">
+                            <span className="picker-header-label">
+                              Options from Accepted Challenges ({availableAcceptedChallenges.length}):
+                            </span>
+                            <button
+                              type="button"
+                              className="picker-close-btn"
+                              onClick={() => setActivePickerTeamId(null)}
+                            >
+                              ✕
+                            </button>
+                          </div>
+
+                          {availableAcceptedChallenges.length === 0 ? (
+                            <div className="picker-empty-hint">
+                              <p style={{ margin: 0, fontWeight: 600 }}>No civic problems accepted yet.</p>
+                              <span className="text-muted" style={{ fontSize: '0.8rem' }}>
+                                First accept challenges from "Discover Open Problems" to assign them to your teams.
+                              </span>
+                              {onNavigateToDiscover && (
+                                <button
+                                  type="button"
+                                  className="btn btn-blue btn-sm"
+                                  style={{ marginTop: '0.5rem' }}
+                                  onClick={onNavigateToDiscover}
+                                >
+                                  Browse Open Problems →
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="picker-options-grid">
+                              {availableAcceptedChallenges.map((prob) => {
+                                const isAssigned = (team.assignedProblemIds || []).some(
+                                  id => String(id) === String(prob.postId)
+                                );
+                                return (
+                                  <div
+                                    key={prob.id}
+                                    className={`picker-option-tile ${isAssigned ? 'is-assigned' : ''}`}
+                                    onClick={() => handleToggleProblem(team.id, prob.postId)}
+                                  >
+                                    <div className="picker-option-check">
+                                      <input
+                                        type="checkbox"
+                                        checked={isAssigned}
+                                        onChange={() => {}}
+                                      />
+                                    </div>
+                                    <div className="picker-option-info">
+                                      <span className="tag-pill category-tag-xs">{prob.category}</span>
+                                      <span className="picker-option-title">{prob.title}</span>
+                                    </div>
+                                    <span className={`picker-badge-status ${isAssigned ? 'assigned' : 'unassigned'}`}>
+                                      {isAssigned ? 'Assigned' : '+ Assign'}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -464,23 +566,32 @@ export function TeamManagement({
       {/* ========================================================================= */}
       {subTab === 'students' && (
         <div className="uni-students-view">
-          <div className="team-filter-bar">
-            <input
-              type="text"
-              placeholder="Search students by name, role, department, or email..."
-              value={studentSearch}
-              onChange={(e) => setStudentSearch(e.target.value)}
-              className="feed-search-input team-search-field"
-            />
-            {studentSearch && (
-              <button
-                type="button"
-                className="feed-search-clear-btn"
-                onClick={() => setStudentSearch('')}
-              >
-                ✕
-              </button>
-            )}
+          <div className="directory-filter-row">
+            <div className="team-filter-bar">
+              <input
+                type="text"
+                placeholder="Search students by name, role, department, or email..."
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                className="feed-search-input team-search-field"
+              />
+              {studentSearch && (
+                <button
+                  type="button"
+                  className="feed-search-clear-btn"
+                  onClick={() => setStudentSearch('')}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              className="btn btn-blue"
+              onClick={handleOpenAddStudent}
+            >
+              + Add Student Researcher
+            </button>
           </div>
 
           <div className="students-directory-card">
@@ -583,13 +694,19 @@ export function TeamManagement({
         <div className="modal-backdrop-overlay" onClick={() => setShowTeamModal(false)}>
           <div className="team-modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-row">
-              <h2 className="modal-heading-title">
-                {editingTeam ? 'Edit Research Team' : 'Create New Research Team'}
-              </h2>
+              <div>
+                <h2 className="modal-heading-title">
+                  {editingTeam ? 'Edit Research Team' : 'Create New Research Team'}
+                </h2>
+                <p className="modal-subheading-text">
+                  Configure multidisciplinary team details, member roster, and problem assignments.
+                </p>
+              </div>
               <button
                 type="button"
                 className="modal-close-icon"
                 onClick={() => setShowTeamModal(false)}
+                title="Close"
               >
                 ✕
               </button>
@@ -683,13 +800,13 @@ export function TeamManagement({
                 <p className="form-help-hint">
                   A single team can work on multiple civic problems accepted by your university.
                 </p>
-                {acceptedProblems.length === 0 ? (
+                {availableAcceptedChallenges.length === 0 ? (
                   <div className="form-empty-hint">
                     No accepted challenges yet. Accept problems from Discover Open Problems to assign them to this team.
                   </div>
                 ) : (
                   <div className="team-multiselect-box">
-                    {acceptedProblems.map((prob) => {
+                    {availableAcceptedChallenges.map((prob) => {
                       const isChecked = teamFormData.assignedProblemIds.some(id => String(id) === String(prob.postId));
                       return (
                         <label key={prob.id} className={`multiselect-row-item ${isChecked ? 'selected' : ''}`}>
@@ -750,13 +867,19 @@ export function TeamManagement({
         <div className="modal-backdrop-overlay" onClick={() => setShowStudentModal(false)}>
           <div className="team-modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-row">
-              <h2 className="modal-heading-title">
-                {editingStudent ? 'Edit Student Researcher' : 'Add Student Researcher'}
-              </h2>
+              <div>
+                <h2 className="modal-heading-title">
+                  {editingStudent ? 'Edit Student Researcher' : 'Add Student Researcher'}
+                </h2>
+                <p className="modal-subheading-text">
+                  Enroll student talent with designated research engineering roles.
+                </p>
+              </div>
               <button
                 type="button"
                 className="modal-close-icon"
                 onClick={() => setShowStudentModal(false)}
+                title="Close"
               >
                 ✕
               </button>
@@ -907,7 +1030,7 @@ export function TeamManagement({
             </div>
 
             <div className="team-modal-body">
-              {acceptedProblems.length === 0 ? (
+              {availableAcceptedChallenges.length === 0 ? (
                 <div className="empty-accepted-box" style={{ margin: '1rem 0' }}>
                   <h3>No Accepted Challenges</h3>
                   <p>
@@ -930,7 +1053,7 @@ export function TeamManagement({
                 </div>
               ) : (
                 <div className="team-problems-toggle-list">
-                  {acceptedProblems.map((prob) => {
+                  {availableAcceptedChallenges.map((prob) => {
                     const isAssigned = (assigningTeam.assignedProblemIds || []).some(
                       id => String(id) === String(prob.postId)
                     );

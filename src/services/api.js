@@ -1514,7 +1514,8 @@ export function getAcceptedChallenges(universityId = null) {
       localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(INITIAL_ACCEPTED_CHALLENGES));
     }
     if (universityId) {
-      return list.filter(c => c.universityId === universityId || c.universityId === 'demo-uni');
+      const filtered = list.filter(c => c.universityId === universityId || c.universityId === 'demo-uni' || !c.universityId);
+      return filtered.length > 0 ? filtered : list;
     }
     return list;
   } catch (e) {
