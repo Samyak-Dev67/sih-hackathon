@@ -35,11 +35,6 @@ export function Navbar({
 
   return (
     <header className="platform-navbar">
-      {/* Top Gradient Announcement Bar */}
-      <div className="navbar-top-announcement">
-        <span>Join us to see how First Look accelerates research with Industry partners. <a href="/industry.html">Register here &rarr;</a></span>
-      </div>
-
       <div className="navbar-inner-wrap">
         {/* Left Section: Brand + Profile Info */}
         <div className="navbar-left-cluster">

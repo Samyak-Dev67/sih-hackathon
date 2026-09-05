@@ -171,31 +171,6 @@ body {
 }
 
 /* Navbar */
-.navbar-top-announcement {
-  background: linear-gradient(90deg, #F43F5E 0%, #D946EF 35%, #8B5CF6 70%, #3B82F6 100%);
-  color: #FFFFFF;
-  padding: 0.45rem 1rem;
-  text-align: center;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-}
-
-.navbar-top-announcement a {
-  color: #FFFFFF;
-  text-decoration: underline;
-  font-weight: 700;
-  margin-left: 0.35rem;
-}
-
-.navbar-top-announcement a:hover {
-  opacity: 0.85;
-}
-
 .platform-navbar {
   background: rgba(16, 14, 25, 0.88);
   backdrop-filter: blur(12px);
