@@ -43,8 +43,31 @@ export function ProblemDetailModal({
   const isGuest = !currentAccount;
   const userRole = currentAccount?.role || (isGuest ? 'guest' : 'citizen');
   const canSubmitSolution = !isGuest && (userRole === 'university' || userRole === 'industry');
-  const hasLiked = currentAccount ? liked_by.includes(currentAccount.id) : false;
-  const hasDownvoted = currentAccount ? downvoted_by.includes(currentAccount.id) : false;
+  const voterId = currentAccount?.id;
+  const hasLiked = voterId && Array.isArray(liked_by) ? liked_by.includes(voterId) : false;
+  const hasDownvoted = voterId && Array.isArray(downvoted_by) ? downvoted_by.includes(voterId) : false;
+  const [isVoting, setIsVoting] = useState(false);
+
+  const handleModalVote = async (direction) => {
+    if (isGuest || !voterId) {
+      if (onOpenAuth) onOpenAuth('login');
+      else alert(`Please sign in to ${direction}vote problems.`);
+      return;
+    }
+    if (isVoting) return;
+    setIsVoting(true);
+    try {
+      if (direction === 'down' && onDownvote) {
+        await onDownvote(id);
+      } else if (onVote) {
+        await onVote(id, direction);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsVoting(false);
+    }
+  };
 
   // Author permissions check & username derivation
   const isAuthor = isPostAuthor(post, currentAccount);
@@ -597,32 +620,18 @@ export function ProblemDetailModal({
               <button 
                 type="button"
                 className={`detail-vote-btn ${hasLiked ? 'active-up' : ''}`}
-                onClick={() => {
-                  if (isGuest) {
-                    if (onOpenAuth) onOpenAuth('login');
-                    else alert('Please sign in to upvote problems.');
-                  } else {
-                    onVote(id, 'up');
-                  }
-                }}
-                title={hasLiked ? "Click to remove upvote" : isGuest ? "Sign in to upvote" : "1 upvote per account"}
+                onClick={() => handleModalVote('up')}
+                disabled={isVoting}
+                title={hasLiked ? "You upvoted this (click to remove)" : isGuest ? "Sign in to upvote" : "1 upvote per account"}
               >
                 ▲ Upvote ({score}) {hasLiked ? '• Upvoted' : ''}
               </button>
               <button 
                 type="button"
                 className={`detail-vote-btn ${hasDownvoted ? 'active-down' : ''}`}
-                onClick={() => {
-                  if (isGuest) {
-                    if (onOpenAuth) onOpenAuth('login');
-                    else alert('Please sign in to downvote problems.');
-                  } else if (onDownvote) {
-                    onDownvote(id);
-                  } else {
-                    onVote(id, 'down');
-                  }
-                }}
-                title={hasDownvoted ? "Click to remove downvote" : isGuest ? "Sign in to downvote" : "1 downvote per account"}
+                onClick={() => handleModalVote('down')}
+                disabled={isVoting}
+                title={hasDownvoted ? "You downvoted this (click to remove)" : isGuest ? "Sign in to downvote" : "1 downvote per account"}
               >
                 ▼ Downvote {hasDownvoted ? '• Downvoted' : ''}
               </button>

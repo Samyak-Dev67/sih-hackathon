@@ -141,12 +141,29 @@ export async function getPosts() {
         ? post.solution
         : [];
     const isResolved = post.resolved === true;
+
+    // Extract metadata from comments JSON if present
+    const meta = Array.isArray(post.comments)
+      ? post.comments.find(c => c && typeof c === 'object' && c.__meta)
+      : null;
+
+    const likedBy = Array.isArray(post.liked_by)
+      ? post.liked_by
+      : (Array.isArray(meta?.liked_by) ? meta.liked_by : []);
+
+    const downvotedBy = Array.isArray(post.downvoted_by)
+      ? post.downvoted_by
+      : (Array.isArray(meta?.downvoted_by) ? meta.downvoted_by : []);
+
     return {
       ...post,
+      score: Number(post.score) || 0,
       solutions: postSols,
       solution: postSols,
       resolved: isResolved,
-      status: isResolved ? 'Resolved' : 'Open'
+      status: isResolved ? 'Resolved' : 'Open',
+      liked_by: likedBy,
+      downvoted_by: downvotedBy
     };
   });
   return formatted;
@@ -188,12 +205,27 @@ export async function getPostById(postId) {
       : [];
   const isResolved = data.resolved === true;
 
+  const meta = Array.isArray(data.comments)
+    ? data.comments.find(c => c && typeof c === 'object' && c.__meta)
+    : null;
+
+  const likedBy = Array.isArray(data.liked_by)
+    ? data.liked_by
+    : (Array.isArray(meta?.liked_by) ? meta.liked_by : []);
+
+  const downvotedBy = Array.isArray(data.downvoted_by)
+    ? data.downvoted_by
+    : (Array.isArray(meta?.downvoted_by) ? meta.downvoted_by : []);
+
   return {
     ...data,
+    score: Number(data.score) || 0,
     solutions: postSols,
     solution: postSols,
     resolved: isResolved,
-    status: isResolved ? 'Resolved' : 'Open'
+    status: isResolved ? 'Resolved' : 'Open',
+    liked_by: likedBy,
+    downvoted_by: downvotedBy
   };
 }
 
@@ -461,7 +493,9 @@ export async function createPost(postData = {}) {
     author_id: authorId || null,
     author_name: authorName || (authorEmail ? authorEmail.split('@')[0] : 'Community Member'),
     author_email: authorEmail || null,
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    liked_by: [],
+    downvoted_by: []
   };
 
   const existingComments = Array.isArray(postData?.comments) ? postData.comments : [];
@@ -813,18 +847,39 @@ export async function deleteComment(postId, commentId, currentAccount) {
 }
 
 /**
- * 3. Like (Upvote) a Problem in Supabase
- * Directly updates `score` in the Supabase `posts` table.
+ * Core unified voting handler
+ * Enforces:
+ * - 1 vote per account (upvote OR downvote)
+ * - If user clicks the same vote arrow again, it toggles off / removes their vote.
+ * - If user clicks the opposite vote arrow, it switches their vote (-2 or +2).
+ * - Persists updated score to Supabase `score` column in the backend.
+ * - Persists voter IDs (liked_by, downvoted_by) to Supabase `comments` metadata in the backend.
  */
-export async function likeProblem(postId, accountId = 'default-account') {
+export async function voteProblem(postId, accountId = 'default-account', direction = 'up') {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
     console.error('❌ [Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  console.log(`📡 [Supabase UPDATE]: Processing upvote for post #${postId}...`);
-  // 1. Fetch current score from Supabase
+  // Derive voter ID
+  let voterId = accountId;
+  if (!voterId || voterId === 'default-account') {
+    try {
+      const saved = localStorage.getItem('fl_active_account');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        voterId = parsed.id || parsed.email || parsed.name;
+      }
+    } catch (e) {}
+  }
+  if (!voterId) {
+    voterId = 'anonymous-user';
+  }
+
+  console.log(`📡 [Supabase UPDATE]: Processing ${direction}vote on post #${postId} for user "${voterId}"...`);
+
+  // 1. Fetch current post from Supabase
   const { data: post, error: fetchError } = await supabase
     .from('posts')
     .select('*')
@@ -832,76 +887,134 @@ export async function likeProblem(postId, accountId = 'default-account') {
     .single();
 
   if (fetchError) {
-    console.error('❌ [Supabase SELECT Error (likeProblem)]:', fetchError);
-    throw new Error(`Supabase failed to read post for upvote: ${fetchError.message}`);
+    console.error(`❌ [Supabase SELECT Error (voteProblem ${direction})]:`, fetchError);
+    throw new Error(`Supabase failed to read post for vote: ${fetchError.message}`);
   }
 
-  const currentScore = Number(post.score) || 0;
-  const newScore = currentScore + 1;
+  let currentScore = Number(post.score) || 0;
 
-  // 2. Update post score in Supabase
+  // Extract comments and __meta
+  const existingComments = Array.isArray(post.comments) ? [...post.comments] : [];
+  let metaIdx = existingComments.findIndex(c => c && typeof c === 'object' && c.__meta);
+  let meta = metaIdx >= 0 ? { ...existingComments[metaIdx] } : { __meta: true };
+
+  // Current liked_by and downvoted_by arrays
+  let likedBy = Array.isArray(post.liked_by)
+    ? [...post.liked_by]
+    : (Array.isArray(meta.liked_by) ? [...meta.liked_by] : []);
+
+  let downvotedBy = Array.isArray(post.downvoted_by)
+    ? [...post.downvoted_by]
+    : (Array.isArray(meta.downvoted_by) ? [...meta.downvoted_by] : []);
+
+  const hasLiked = likedBy.includes(voterId);
+  const hasDownvoted = downvotedBy.includes(voterId);
+
+  let newScore = currentScore;
+
+  if (direction === 'up') {
+    if (hasLiked) {
+      // Toggle off: remove upvote (user can only upvote once; clicking again cancels it)
+      console.log(`ℹ️ [Vote]: User ${voterId} already upvoted post #${postId}. Toggling off upvote.`);
+      likedBy = likedBy.filter(id => id !== voterId);
+      newScore = currentScore - 1;
+    } else if (hasDownvoted) {
+      // Switch from downvote to upvote: removes downvote, adds upvote (+2 net)
+      console.log(`ℹ️ [Vote]: User ${voterId} switching from downvote to upvote on post #${postId}.`);
+      downvotedBy = downvotedBy.filter(id => id !== voterId);
+      likedBy.push(voterId);
+      newScore = currentScore + 2;
+    } else {
+      // First-time upvote (+1)
+      console.log(`ℹ️ [Vote]: User ${voterId} upvoting post #${postId}.`);
+      likedBy.push(voterId);
+      newScore = currentScore + 1;
+    }
+  } else if (direction === 'down') {
+    if (hasDownvoted) {
+      // Toggle off: remove downvote (user can only downvote once; clicking again cancels it)
+      console.log(`ℹ️ [Vote]: User ${voterId} already downvoted post #${postId}. Toggling off downvote.`);
+      downvotedBy = downvotedBy.filter(id => id !== voterId);
+      newScore = currentScore + 1;
+    } else if (hasLiked) {
+      // Switch from upvote to downvote: removes upvote, adds downvote (-2 net)
+      console.log(`ℹ️ [Vote]: User ${voterId} switching from upvote to downvote on post #${postId}.`);
+      likedBy = likedBy.filter(id => id !== voterId);
+      downvotedBy.push(voterId);
+      newScore = currentScore - 2;
+    } else {
+      // First-time downvote (-1)
+      console.log(`ℹ️ [Vote]: User ${voterId} downvoting post #${postId}.`);
+      downvotedBy.push(voterId);
+      newScore = currentScore - 1;
+    }
+  }
+
+  // Update __meta with the updated voter arrays
+  meta.liked_by = likedBy;
+  meta.downvoted_by = downvotedBy;
+  if (metaIdx >= 0) {
+    existingComments[metaIdx] = meta;
+  } else {
+    existingComments.unshift(meta);
+  }
+
+  // 2. Persist updated score and comments to Supabase
+  const updatePayload = {
+    score: newScore,
+    comments: existingComments
+  };
+
   const { data, error } = await supabase
     .from('posts')
-    .update({ score: newScore })
+    .update(updatePayload)
     .eq('id', postId)
     .select();
 
   if (error) {
-    console.error('❌ [Supabase UPDATE Error (likeProblem)]:', error);
+    console.error(`❌ [Supabase UPDATE Error (voteProblem)]`, error);
     if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501). Add an UPDATE policy in Supabase.');
+      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501).');
     }
-    throw new Error(`Supabase upvote failed: ${error.message}`);
+    throw new Error(`Supabase vote failed: ${error.message}`);
   }
 
-  console.log(`✅ [Supabase UPDATE Success]: Post #${postId} score updated to ${newScore}`);
-  return data && data.length > 0 ? data[0] : { ...post, score: newScore };
+  console.log(`✅ [Supabase UPDATE Success]: Post #${postId} score updated to ${newScore} in backend (liked_by: ${likedBy.length}, downvoted_by: ${downvotedBy.length})`);
+
+  const updatedRow = data && data.length > 0 ? data[0] : { ...post, ...updatePayload };
+  const postSols = Array.isArray(updatedRow.solutions)
+    ? updatedRow.solutions
+    : Array.isArray(updatedRow.solution)
+      ? updatedRow.solution
+      : [];
+  const isResolved = updatedRow.resolved === true;
+
+  return {
+    ...updatedRow,
+    score: newScore,
+    solutions: postSols,
+    solution: postSols,
+    resolved: isResolved,
+    status: isResolved ? 'Resolved' : 'Open',
+    liked_by: likedBy,
+    downvoted_by: downvotedBy
+  };
+}
+
+/**
+ * 3. Like (Upvote) a Problem in Supabase
+ * Directly updates `score` in the Supabase `posts` table and tracks 1 vote per account.
+ */
+export async function likeProblem(postId, accountId = 'default-account') {
+  return voteProblem(postId, accountId, 'up');
 }
 
 /**
  * 3b. Downvote a Problem in Supabase
- * Directly decrements `score` in the Supabase `posts` table.
+ * Directly decrements `score` in the Supabase `posts` table and tracks 1 vote per account.
  */
 export async function downvoteProblem(postId, accountId = 'default-account') {
-  if (!supabase) {
-    const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
-    throw err;
-  }
-
-  console.log(`📡 [Supabase UPDATE]: Processing downvote for post #${postId}...`);
-  // 1. Fetch current score from Supabase
-  const { data: post, error: fetchError } = await supabase
-    .from('posts')
-    .select('*')
-    .eq('id', postId)
-    .single();
-
-  if (fetchError) {
-    console.error('❌ [Supabase SELECT Error (downvoteProblem)]:', fetchError);
-    throw new Error(`Supabase failed to read post for downvote: ${fetchError.message}`);
-  }
-
-  const currentScore = Number(post.score) || 0;
-  const newScore = currentScore - 1;
-
-  // 2. Update post score in Supabase
-  const { data, error } = await supabase
-    .from('posts')
-    .update({ score: newScore })
-    .eq('id', postId)
-    .select();
-
-  if (error) {
-    console.error('❌ [Supabase UPDATE Error (downvoteProblem)]:', error);
-    if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501). Add an UPDATE policy in Supabase.');
-    }
-    throw new Error(`Supabase downvote failed: ${error.message}`);
-  }
-
-  console.log(`✅ [Supabase UPDATE Success]: Post #${postId} score decremented to ${newScore}`);
-  return data && data.length > 0 ? data[0] : { ...post, score: newScore };
+  return voteProblem(postId, accountId, 'down');
 }
 
 /**
@@ -1272,9 +1385,12 @@ export const postService = {
   deleteComment,
   isCommentAuthor,
   formatRelativeTime,
+  voteProblem,
+  votePost: voteProblem,
   likeProblem,
   likePost: likeProblem,
   downvoteProblem,
+  downvotePost: downvoteProblem,
   submitSolution,
   deleteSolution,
   getSolutions,

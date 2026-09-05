@@ -36,14 +36,78 @@ export function Navbar({
   return (
     <header className="platform-navbar">
       <div className="navbar-inner-wrap">
-        {/* Brand Left */}
-        <a href="/" className="navbar-brand-group" style={{ textDecoration: 'none' }}>
-          <div className="brand-logo-sq">FL</div>
-          <div className="brand-text-col">
-            <span className="brand-main-title">First Look</span>
-            <span className="brand-sub-title">PUBLIC PROBLEM SOLVING</span>
-          </div>
-        </a>
+        {/* Left Section: Brand + Profile Info */}
+        <div className="navbar-left-cluster">
+          <a href="/" className="navbar-brand-group" style={{ textDecoration: 'none' }}>
+            <div className="brand-logo-sq">FL</div>
+            <div className="brand-text-col">
+              <span className="brand-main-title">First Look</span>
+              <span className="brand-sub-title">PUBLIC PROBLEM SOLVING</span>
+            </div>
+          </a>
+
+          {/* Profile Info - Positioned at Top Left */}
+          {currentUser && (
+            <div className="profile-card-container">
+              <div 
+                className="profile-pill-card"
+                onClick={() => setShowProfileMenu(!showProfileMenu)}
+                title="Account menu"
+              >
+                <div className="profile-avatar-circle">
+                  {currentUser.initials || currentUser.name?.charAt(0) || 'U'}
+                </div>
+                <div className="profile-text-group">
+                  <span className="profile-user-name">{currentUser.name}</span>
+                  <span className={`profile-role-tag ${roleInfo.cls}`}>
+                    {roleInfo.short}
+                  </span>
+                </div>
+                <span className="profile-dropdown-arrow">▾</span>
+              </div>
+
+              {/* Profile Dropdown */}
+              {showProfileMenu && (
+                <div className="profile-dropdown-menu">
+                  <div className="dropdown-header">
+                    <strong>{currentUser.name}</strong>
+                    <span className="dropdown-email">{currentUser.email || 'Logged In'}</span>
+                    <span className={`dropdown-role-indicator ${roleInfo.cls}`}>
+                      {roleInfo.label} Account ({roleInfo.short})
+                    </span>
+                  </div>
+
+                  <div className="dropdown-divider"></div>
+
+                  <a 
+                    href={roleInfo.path} 
+                    className="dropdown-item-btn"
+                    style={{ textDecoration: 'none' }}
+                  >
+                    Go to My Dashboard
+                  </a>
+
+                  <div className="dropdown-divider"></div>
+
+                  <button 
+                    type="button"
+                    className="dropdown-item-btn logout-item"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      if (onLogout) onLogout();
+                      else {
+                        localStorage.removeItem('fl_active_account');
+                        window.location.href = '/';
+                      }
+                    }}
+                  >
+                    Log Out
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Global Search Bar (Highlighted in Green) */}
         <div className="navbar-search-bar">
@@ -98,71 +162,11 @@ export function Navbar({
           )}
         </nav>
 
-        {/* Right Section: Theme Toggle + Profile OR Login Button */}
+        {/* Right Section: Theme Toggle + Login Button (if guest) */}
         <div className="navbar-right-cluster">
           <DarkModeToggle theme={theme} onToggle={onToggleTheme} />
 
-          {currentUser ? (
-            /* Logged-in User Profile Card with (Uni, citz, inds) badge */
-            <div className="profile-card-container">
-              <div 
-                className="profile-pill-card"
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                title="Account menu"
-              >
-                <div className="profile-avatar-circle">
-                  {currentUser.initials || currentUser.name?.charAt(0) || 'U'}
-                </div>
-                <div className="profile-text-group">
-                  <span className="profile-user-name">{currentUser.name}</span>
-                  <span className={`profile-role-tag ${roleInfo.cls}`}>
-                    {roleInfo.short}
-                  </span>
-                </div>
-                <span className="profile-dropdown-arrow">▾</span>
-              </div>
-
-              {/* Profile Dropdown */}
-              {showProfileMenu && (
-                <div className="profile-dropdown-menu">
-                  <div className="dropdown-header">
-                    <strong>{currentUser.name}</strong>
-                    <span className="dropdown-email">{currentUser.email || 'Logged In'}</span>
-                    <span className={`dropdown-role-indicator ${roleInfo.cls}`}>
-                      {roleInfo.label} Account ({roleInfo.short})
-                    </span>
-                  </div>
-
-                  <div className="dropdown-divider"></div>
-
-                  <a 
-                    href={roleInfo.path}
-                    className="dropdown-item-btn"
-                    style={{ textDecoration: 'none' }}
-                  >
-                    Go to My Dashboard
-                  </a>
-
-                  <div className="dropdown-divider"></div>
-
-                  <button 
-                    type="button"
-                    className="dropdown-item-btn logout-item"
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      if (onLogout) onLogout();
-                      else {
-                        localStorage.removeItem('fl_active_account');
-                        window.location.href = '/';
-                      }
-                    }}
-                  >
-                    Log Out
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
+          {!currentUser && (
             /* Guest Sign In button - When not logged in */
             <button 
               type="button"

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { isPostAuthor, getPostAuthorInfo, getPostStatus, formatRelativeTime } from '../services/api';
 
 export function ProblemCard({ 
@@ -43,8 +43,32 @@ export function ProblemCard({
   const status = getPostStatus(post);
   const isResolved = status === 'Resolved' || resolved === true || post.resolved === true;
 
-  const hasLiked = liked_by.includes(accountObj?.id);
-  const hasDownvoted = downvoted_by.includes(accountObj?.id);
+  const voterId = accountObj?.id;
+  const hasLiked = voterId && Array.isArray(liked_by) ? liked_by.includes(voterId) : false;
+  const hasDownvoted = voterId && Array.isArray(downvoted_by) ? downvoted_by.includes(voterId) : false;
+
+  const [isVoting, setIsVoting] = useState(false);
+
+  const handleArrowVote = async (e, direction) => {
+    e.stopPropagation();
+    if (!voterId) {
+      alert(`Please sign in to ${direction}vote problems.`);
+      return;
+    }
+    if (isVoting) return;
+    setIsVoting(true);
+    try {
+      if (direction === 'down' && onDownvote) {
+        await onDownvote(id);
+      } else if (onVote) {
+        await onVote(id, direction);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsVoting(false);
+    }
+  };
 
   const getTimeAgo = (dateStr) => formatRelativeTime(dateStr);
 
@@ -78,11 +102,9 @@ export function ProblemCard({
         <button 
           type="button"
           className={`vote-arrow ${hasLiked ? 'active-up' : ''}`}
-          onClick={(e) => { 
-            e.stopPropagation(); 
-            onVote(id, 'up'); 
-          }}
-          title={hasLiked ? "You upvoted this (click to remove)" : "Click to upvote"}
+          onClick={(e) => handleArrowVote(e, 'up')}
+          disabled={isVoting}
+          title={hasLiked ? "You upvoted this (click to remove)" : "Click to upvote (1 per account)"}
           aria-label="Upvote"
         >
           ▲
@@ -93,15 +115,9 @@ export function ProblemCard({
         <button 
           type="button"
           className={`vote-arrow ${hasDownvoted ? 'active-down' : ''}`}
-          onClick={(e) => { 
-            e.stopPropagation(); 
-            if (onDownvote) {
-              onDownvote(id);
-            } else {
-              onVote(id, 'down');
-            }
-          }}
-          title={hasDownvoted ? "Click to remove downvote" : "Click to downvote"}
+          onClick={(e) => handleArrowVote(e, 'down')}
+          disabled={isVoting}
+          title={hasDownvoted ? "You downvoted this (click to remove)" : "Click to downvote (1 per account)"}
           aria-label="Downvote"
         >
           ▼

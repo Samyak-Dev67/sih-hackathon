@@ -57,12 +57,18 @@ function IndustryPage() {
 
   const handleVote = async (postId, direction = 'up') => {
     if (!account) return;
-    const updated = direction === 'down'
-      ? await postService.downvotePost(postId, account.id)
-      : await postService.likePost(postId, account.id);
-    if (updated) {
-      setPosts(prev => prev.map(p => p.id === postId ? updated : p));
-      if (selectedPost && selectedPost.id === postId) setSelectedPost(updated);
+    try {
+      const updated = direction === 'down'
+        ? await postService.downvotePost(postId, account.id)
+        : await postService.likePost(postId, account.id);
+      if (updated) {
+        setPosts(prev => prev.map(p => p.id === postId ? updated : p));
+        if (selectedPost && selectedPost.id === postId) setSelectedPost(updated);
+      }
+      return updated;
+    } catch (err) {
+      console.error(`Failed to ${direction}vote problem #${postId}:`, err);
+      alert(err.message || `Failed to ${direction}vote problem.`);
     }
   };
 
