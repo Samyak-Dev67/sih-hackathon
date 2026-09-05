@@ -105,50 +105,5 @@ export const INITIAL_POSTS = [
   }
 ];
 
-export const INITIAL_ACCEPTED_CHALLENGES = [
-  {
-    id: 'ac-1',
-    postId: 104,
-    title: 'Urban Heat Island Effect in South Residential Zone',
-    category: 'Environment',
-    milestoneDeadline: 'Dec 15, 2026',
-    progress: 67,
-    team: [
-      { name: 'Dr. Aris Vance', initials: 'AV' },
-      { name: 'Prof. K. Sharma', initials: 'KS' },
-      { name: 'R. Sen', initials: 'RS' }
-    ],
-    milestones: [
-      { id: 'm-1', title: 'Phase 1: Micro-Climate Thermal Drone Mapping', deadline: 'Oct 15, 2026', completed: true },
-      { id: 'm-2', title: 'Phase 2: Cool Roof & Pavement Material Field Trials', deadline: 'Nov 10, 2026', completed: true },
-      { id: 'm-3', title: 'Phase 3: Community Prototype Installation & Sensor Deployment', deadline: 'Dec 15, 2026', completed: false }
-    ],
-    universityId: 'demo-uni',
-    universityName: 'University Research Lab',
-    fundedByIndustry: { id: 'ind-1', name: 'Tata Sustainable Cities' },
-    status: 'In Progress'
-  },
-  {
-    id: 'ac-2',
-    postId: 101,
-    title: 'Monsoon Waterlogging and Drain Backflow near Old Station Road',
-    category: 'Infrastructure',
-    milestoneDeadline: 'Jan 30, 2027',
-    progress: 25,
-    team: [
-      { name: 'Dr. Aris Vance', initials: 'AV' },
-      { name: 'M. Mehta', initials: 'MM' }
-    ],
-    milestones: [
-      { id: 'm-4', title: 'Hydrological Flow Modeling & Silt Profiling', deadline: 'Oct 30, 2026', completed: true },
-      { id: 'm-5', title: 'Modular Desilting Sump CAD Specification', deadline: 'Dec 05, 2026', completed: false },
-      { id: 'm-6', title: 'Permeable Paver Testing on Drainage Gradient', deadline: 'Dec 28, 2026', completed: false },
-      { id: 'm-7', title: 'Municipal Validation & Deployment Pilot', deadline: 'Jan 30, 2027', completed: false }
-    ],
-    universityId: 'demo-uni',
-    universityName: 'University Research Lab',
-    fundedByIndustry: null,
-    status: 'In Progress'
-  }
-];
+export const INITIAL_ACCEPTED_CHALLENGES = [];
 

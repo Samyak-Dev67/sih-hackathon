@@ -4,7 +4,9 @@ import {
   canAccessWorkspace, 
   addMilestone, 
   toggleMilestone, 
-  deleteMilestone 
+  deleteMilestone,
+  getTeamsForProblem,
+  getUniversityStudents
 } from '../services/api';
 
 export function ProblemWorkspace({ 
@@ -18,6 +20,9 @@ export function ProblemWorkspace({
   const [isAddingMilestone, setIsAddingMilestone] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDeadline, setNewDeadline] = useState('');
+
+  const assignedTeams = getTeamsForProblem(claim?.universityId || currentAccount?.id, postId);
+  const allStudents = getUniversityStudents(claim?.universityId || currentAccount?.id);
 
   // If no claim exists for this problem
   if (!claim) {
@@ -140,6 +145,45 @@ export function ProblemWorkspace({
                 {claim.universityName?.slice(0, 2).toUpperCase() || 'UN'}
               </div>
               <strong>{claim.universityName}</strong>
+            </div>
+          </div>
+
+          <div className="stakeholder-chip team-stakeholder">
+            <span className="stakeholder-label">ASSIGNED RESEARCH TEAMS</span>
+            <div className="stakeholder-name-row">
+              {assignedTeams.length === 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span className="text-muted" style={{ fontSize: '0.85rem' }}>No student team assigned yet</span>
+                  {isUniversity && (
+                    <button
+                      type="button"
+                      className="btn-link-action"
+                      style={{ fontSize: '0.8rem' }}
+                      onClick={onBack}
+                    >
+                      Configure in Team Management →
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {assignedTeams.map((team) => {
+                    const teamStudents = allStudents.filter(s => (team.studentIds || []).includes(s.id));
+                    return (
+                      <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span className="team-assigned-name-pill">{team.name}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          {teamStudents.map((s) => (
+                            <span key={s.id} className="student-role-pill" title={`${s.name} (${s.role})`}>
+                              {s.name} • {s.role}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 

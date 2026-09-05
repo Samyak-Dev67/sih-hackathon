@@ -1505,6 +1505,11 @@ export function getAcceptedChallenges(universityId = null) {
   try {
     const raw = localStorage.getItem(ACCEPTED_CHALLENGES_KEY);
     let list = raw ? JSON.parse(raw) : INITIAL_ACCEPTED_CHALLENGES;
+    // Purge legacy sample challenges ('ac-1', 'ac-2') if previously saved in browser localStorage
+    if (Array.isArray(list) && list.some(c => c.id === 'ac-1' || c.id === 'ac-2')) {
+      list = list.filter(c => c.id !== 'ac-1' && c.id !== 'ac-2');
+      localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(list));
+    }
     if (!raw) {
       localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(INITIAL_ACCEPTED_CHALLENGES));
     }
@@ -1684,6 +1689,258 @@ export function getChallengeWorkspace(postId) {
 }
 
 /**
+ * ==============================================================================
+ * UNIVERSITY TEAM & STUDENT MANAGEMENT SERVICE
+ * ==============================================================================
+ */
+
+const DEFAULT_STUDENTS = [
+  {
+    id: 'stu-1',
+    name: 'Aarav Deshmukh',
+    role: 'Embedded Systems Lead',
+    department: 'Electrical Engineering',
+    email: 'aarav.d@univ.edu.in',
+    initials: 'AD'
+  },
+  {
+    id: 'stu-2',
+    name: 'Pooja Sundaram',
+    role: 'Water Quality Analyst',
+    department: 'Chemical Engineering',
+    email: 'pooja.s@univ.edu.in',
+    initials: 'PS'
+  },
+  {
+    id: 'stu-3',
+    name: 'Rohan Mehra',
+    role: 'IoT Firmware Developer',
+    department: 'Computer Science & Engineering',
+    email: 'rohan.m@univ.edu.in',
+    initials: 'RM'
+  },
+  {
+    id: 'stu-4',
+    name: 'Sneha Kulkarni',
+    role: 'GIS & Spatial Mapping Specialist',
+    department: 'Geoinformatics',
+    email: 'sneha.k@univ.edu.in',
+    initials: 'SK'
+  }
+];
+
+const DEFAULT_TEAMS = [
+  {
+    id: 'team-1',
+    name: 'AquaPure Research Cohort',
+    description: 'Multidisciplinary sensor telemetry and community water filtration engineering group.',
+    department: 'Environmental & Sensor Engineering',
+    studentIds: ['stu-1', 'stu-2', 'stu-3'],
+    assignedProblemIds: []
+  }
+];
+
+function getStudentsKey(universityId) {
+  return `fl_students_${universityId || 'default'}`;
+}
+
+function getTeamsKey(universityId) {
+  return `fl_teams_${universityId || 'default'}`;
+}
+
+export function getUniversityStudents(universityId = null) {
+  try {
+    const key = getStudentsKey(universityId);
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      localStorage.setItem(key, JSON.stringify(DEFAULT_STUDENTS));
+      return DEFAULT_STUDENTS;
+    }
+    return JSON.parse(raw);
+  } catch (e) {
+    return DEFAULT_STUDENTS;
+  }
+}
+
+export function saveUniversityStudents(universityId, students) {
+  try {
+    localStorage.setItem(getStudentsKey(universityId), JSON.stringify(students));
+  } catch (e) {
+    console.error('Failed to save students:', e);
+  }
+}
+
+export function addUniversityStudent(universityId, studentData) {
+  if (!studentData || !studentData.name?.trim()) return null;
+  const list = getUniversityStudents(universityId);
+  const name = studentData.name.trim();
+  const parts = name.split(' ');
+  const initials = parts.length > 1
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+
+  const newStudent = {
+    id: `stu-${Date.now()}`,
+    name,
+    role: studentData.role?.trim() || 'Student Researcher',
+    department: studentData.department?.trim() || 'Engineering & Technology',
+    email: studentData.email?.trim() || '',
+    initials
+  };
+
+  const updated = [...list, newStudent];
+  saveUniversityStudents(universityId, updated);
+
+  if (Array.isArray(studentData.teamIds) && studentData.teamIds.length > 0) {
+    const teams = getUniversityTeams(universityId);
+    const updatedTeams = teams.map(t => {
+      if (studentData.teamIds.includes(t.id) && !t.studentIds.includes(newStudent.id)) {
+        return { ...t, studentIds: [...t.studentIds, newStudent.id] };
+      }
+      return t;
+    });
+    saveUniversityTeams(universityId, updatedTeams);
+  }
+
+  return newStudent;
+}
+
+export function updateUniversityStudent(universityId, studentId, studentData) {
+  if (!studentId || !studentData) return null;
+  const list = getUniversityStudents(universityId);
+  const name = studentData.name?.trim() || 'Student Researcher';
+  const parts = name.split(' ');
+  const initials = parts.length > 1
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+
+  const updated = list.map(s => {
+    if (s.id === studentId) {
+      return {
+        ...s,
+        name,
+        role: studentData.role?.trim() || s.role,
+        department: studentData.department?.trim() || s.department,
+        email: studentData.email?.trim() || s.email,
+        initials
+      };
+    }
+    return s;
+  });
+  saveUniversityStudents(universityId, updated);
+  return updated.find(s => s.id === studentId);
+}
+
+export function deleteUniversityStudent(universityId, studentId) {
+  if (!studentId) return false;
+  const list = getUniversityStudents(universityId);
+  const filtered = list.filter(s => s.id !== studentId);
+  saveUniversityStudents(universityId, filtered);
+
+  const teams = getUniversityTeams(universityId);
+  const updatedTeams = teams.map(t => ({
+    ...t,
+    studentIds: (t.studentIds || []).filter(id => id !== studentId)
+  }));
+  saveUniversityTeams(universityId, updatedTeams);
+  return true;
+}
+
+export function getUniversityTeams(universityId = null) {
+  try {
+    const key = getTeamsKey(universityId);
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      localStorage.setItem(key, JSON.stringify(DEFAULT_TEAMS));
+      return DEFAULT_TEAMS;
+    }
+    return JSON.parse(raw);
+  } catch (e) {
+    return DEFAULT_TEAMS;
+  }
+}
+
+export function saveUniversityTeams(universityId, teams) {
+  try {
+    localStorage.setItem(getTeamsKey(universityId), JSON.stringify(teams));
+  } catch (e) {
+    console.error('Failed to save teams:', e);
+  }
+}
+
+export function createUniversityTeam(universityId, teamData) {
+  if (!teamData || !teamData.name?.trim()) return null;
+  const teams = getUniversityTeams(universityId);
+  const newTeam = {
+    id: `team-${Date.now()}`,
+    name: teamData.name.trim(),
+    description: teamData.description?.trim() || '',
+    department: teamData.department?.trim() || 'General Engineering',
+    studentIds: Array.isArray(teamData.studentIds) ? teamData.studentIds : [],
+    assignedProblemIds: Array.isArray(teamData.assignedProblemIds) ? teamData.assignedProblemIds : [],
+    createdAt: new Date().toISOString()
+  };
+  const updated = [...teams, newTeam];
+  saveUniversityTeams(universityId, updated);
+  return newTeam;
+}
+
+export function updateUniversityTeam(universityId, teamId, teamData) {
+  if (!teamId || !teamData) return null;
+  const teams = getUniversityTeams(universityId);
+  const updated = teams.map(t => {
+    if (t.id === teamId) {
+      return {
+        ...t,
+        name: teamData.name?.trim() || t.name,
+        description: teamData.description !== undefined ? teamData.description.trim() : t.description,
+        department: teamData.department?.trim() || t.department,
+        studentIds: Array.isArray(teamData.studentIds) ? teamData.studentIds : t.studentIds,
+        assignedProblemIds: Array.isArray(teamData.assignedProblemIds) ? teamData.assignedProblemIds : t.assignedProblemIds
+      };
+    }
+    return t;
+  });
+  saveUniversityTeams(universityId, updated);
+  return updated.find(t => t.id === teamId);
+}
+
+export function deleteUniversityTeam(universityId, teamId) {
+  if (!teamId) return false;
+  const teams = getUniversityTeams(universityId);
+  const filtered = teams.filter(t => t.id !== teamId);
+  saveUniversityTeams(universityId, filtered);
+  return true;
+}
+
+export function toggleTeamProblemAssignment(universityId, teamId, postId) {
+  if (!teamId || !postId) return null;
+  const teams = getUniversityTeams(universityId);
+  const updated = teams.map(t => {
+    if (t.id === teamId) {
+      const current = t.assignedProblemIds || [];
+      const hasPost = current.some(id => String(id) === String(postId));
+      const nextProblemIds = hasPost
+        ? current.filter(id => String(id) !== String(postId))
+        : [...current, postId];
+      return {
+        ...t,
+        assignedProblemIds: nextProblemIds
+      };
+    }
+    return t;
+  });
+  saveUniversityTeams(universityId, updated);
+  return updated.find(t => t.id === teamId);
+}
+
+export function getTeamsForProblem(universityId, postId) {
+  if (!postId) return [];
+  const teams = getUniversityTeams(universityId);
+  return teams.filter(t => (t.assignedProblemIds || []).some(id => String(id) === String(postId)));
+}
+
+/**
  * Combined API Service Object
  */
 export const postService = {
@@ -1726,7 +1983,17 @@ export const postService = {
   addMilestone,
   toggleMilestone,
   deleteMilestone,
-  isProblemLocked
+  isProblemLocked,
+  getUniversityStudents,
+  addUniversityStudent,
+  updateUniversityStudent,
+  deleteUniversityStudent,
+  getUniversityTeams,
+  createUniversityTeam,
+  updateUniversityTeam,
+  deleteUniversityTeam,
+  toggleTeamProblemAssignment,
+  getTeamsForProblem
 };
 
 export { filterProblems };

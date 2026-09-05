@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { ProblemCard } from './ProblemCard';
+import { TeamManagement } from './TeamManagement';
 import { CATEGORIES } from '../data/mockData';
-import { getAcceptedChallenges } from '../services/api';
+import {
+  getAcceptedChallenges,
+  getUniversityTeams,
+  getUniversityStudents,
+  getTeamsForProblem
+} from '../services/api';
 
 export function UniversityDashboard({ 
   currentAccount, 
@@ -14,12 +20,14 @@ export function UniversityDashboard({
   onOpenWorkspace,
   onAcceptChallenge
 }) {
-  const [activeTab, setActiveTab] = useState('accepted'); // 'accepted' | 'discover'
+  const [activeTab, setActiveTab] = useState('accepted'); // 'accepted' | 'discover' | 'teams'
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [localSearch, setLocalSearch] = useState('');
 
   // Fetch accepted challenges for this university
   const acceptedList = getAcceptedChallenges(currentAccount?.id);
+  const uniTeams = getUniversityTeams(currentAccount?.id);
+  const uniStudents = getUniversityStudents(currentAccount?.id);
 
   const activeSearch = propSearchQuery !== undefined ? propSearchQuery : localSearch;
   const setActiveSearch = propOnSearchChange || setLocalSearch;
@@ -49,6 +57,13 @@ export function UniversityDashboard({
           onClick={() => setActiveTab('accepted')}
         >
           Accepted Challenges ({acceptedList.length})
+        </button>
+        <button
+          type="button"
+          className={`uni-nav-tab-btn ${activeTab === 'teams' ? 'active' : ''}`}
+          onClick={() => setActiveTab('teams')}
+        >
+          Team Management ({uniTeams.length})
         </button>
         <button
           type="button"
@@ -93,13 +108,15 @@ export function UniversityDashboard({
             <div className="uni-metric-card">
               <span className="uni-metric-label">IN PROGRESS MILESTONES</span>
               <span className="uni-metric-value text-orange">
-                {acceptedList.length > 0 ? acceptedList.length * 2 : 0}
+                {acceptedList.reduce((acc, c) => acc + (c.milestones ? c.milestones.filter(m => !m.completed).length : 0), 0)}
               </span>
             </div>
 
             <div className="uni-metric-card">
               <span className="uni-metric-label">COMPLETED SOLUTIONS</span>
-              <span className="uni-metric-value text-green">8</span>
+              <span className="uni-metric-value text-green">
+                {acceptedList.filter(c => c.progress === 100).length}
+              </span>
             </div>
           </div>
 
@@ -156,17 +173,47 @@ export function UniversityDashboard({
                     <div className="uni-challenge-footer-row">
                       <div className="uni-team-assigned-block">
                         <span className="uni-team-label">Team Assigned:</span>
-                        <div className="uni-team-avatars-row">
-                          {(challenge.team || [{ name: 'Lead', initials: 'FL' }]).map((member, mIdx) => (
-                            <div 
-                              key={mIdx} 
-                              className="uni-team-avatar-circle" 
-                              title={member.name}
-                            >
-                              {member.initials}
+                        {(() => {
+                          const assignedTeams = getTeamsForProblem(currentAccount?.id, challenge.postId);
+                          const assignedStudents = uniStudents.filter(s =>
+                            assignedTeams.some(t => (t.studentIds || []).includes(s.id))
+                          );
+
+                          if (assignedTeams.length === 0) {
+                            return (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <span className="text-muted" style={{ fontSize: '0.82rem' }}>No team assigned</span>
+                                <button
+                                  type="button"
+                                  className="btn-link-action"
+                                  style={{ fontSize: '0.78rem' }}
+                                  onClick={() => setActiveTab('teams')}
+                                >
+                                  + Assign Team
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                              <span className="team-assigned-name-pill">
+                                {assignedTeams.map(t => t.name).join(', ')}
+                              </span>
+                              <div className="uni-team-avatars-row">
+                                {assignedStudents.map((member) => (
+                                  <div 
+                                    key={member.id} 
+                                    className="uni-team-avatar-circle" 
+                                    title={`${member.name} (${member.role})`}
+                                  >
+                                    {member.initials}
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          ))}
-                        </div>
+                          );
+                        })()}
                       </div>
 
                       <div className="uni-card-action-group">
@@ -185,10 +232,24 @@ export function UniversityDashboard({
             )}
           </div>
         </div>
-      ) : (
-        /* ========================================================================= */
-        /* TAB 2: DISCOVER OPEN PROBLEMS (Open Civic Challenges Catalog)             */
-        /* ========================================================================= */
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 2: TEAM MANAGEMENT (Specialized Multi-Student Teams)                  */}
+      {/* ========================================================================= */}
+      {activeTab === 'teams' && (
+        <TeamManagement
+          currentAccount={currentAccount}
+          acceptedProblems={acceptedList}
+          onOpenWorkspace={onOpenWorkspace}
+          onNavigateToDiscover={() => setActiveTab('discover')}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: DISCOVER OPEN PROBLEMS (Open Civic Challenges Catalog)             */}
+      {/* ========================================================================= */}
+      {activeTab === 'discover' && (
         <div className="dashboard-layout-grid">
           {/* Left Category Filter Sidebar */}
           <aside className="dashboard-sidebar">
