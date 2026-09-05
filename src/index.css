@@ -816,9 +816,55 @@ body {
   gap: 1.5rem;
 }
 
+/* Compact Dashboard Header - Minimal & non-obstructing */
+.dashboard-compact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 1.15rem;
+  background: linear-gradient(135deg, rgba(19, 17, 28, 0.85) 0%, rgba(168, 85, 247, 0.08) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.compact-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.compact-header-left .banner-role-pill {
+  margin-bottom: 0;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.68rem;
+}
+
+.compact-header-tagline {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Compact Sidebar CTA Widget */
+.compact-cta-widget {
+  padding: 0.75rem 0.9rem !important;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.compact-cta-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
 .dashboard-welcome-banner {
-  border-radius: 16px;
-  padding: 2rem 2.25rem;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;

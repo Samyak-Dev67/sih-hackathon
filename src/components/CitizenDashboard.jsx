@@ -41,33 +41,20 @@ export function CitizenDashboard({
 
   return (
     <div className="dashboard-container">
-      {/* Citizen Banner */}
-      <div className="dashboard-welcome-banner citizen-banner">
-        <div className="banner-text-content">
+      {/* Compact Citizen Banner - Smart, minimal, non-obstructing */}
+      <div className="dashboard-compact-header citizen-header">
+        <div className="compact-header-left">
           <span className="banner-role-pill">CITIZEN PORTAL</span>
-          <h2>Voice Community Needs. Connect with Problem Solvers.</h2>
-          <p>
-            Submit real-world civic problems in your neighborhood. Local universities and enterprise
-            partners review community proposals and submit structured solutions.
-          </p>
+          <span className="compact-header-tagline">Voice community needs & connect with university and industry problem solvers</span>
         </div>
-        <div className="banner-action">
-          {!showSubmitView ? (
-            <button 
-              className="btn btn-blue banner-btn"
-              onClick={() => setShowSubmitView(true)}
-            >
-              + Post a Problem
-            </button>
-          ) : (
-            <button 
-              className="btn btn-outline banner-btn"
-              onClick={() => setShowSubmitView(false)}
-            >
-              ← Back to Problems
-            </button>
-          )}
-        </div>
+        {showSubmitView && (
+          <button 
+            className="btn btn-outline btn-sm"
+            onClick={() => setShowSubmitView(false)}
+          >
+            ← Back to Problems
+          </button>
+        )}
       </div>
 
       {showSubmitView ? (
@@ -82,17 +69,14 @@ export function CitizenDashboard({
         <div className="dashboard-layout-grid">
           {/* Left Sidebar */}
           <aside className="dashboard-sidebar">
-            <div className="sidebar-widget">
-              <div className="widget-header">
-                <h4>Identify a Problem?</h4>
-                <p>Post a problem to let universities and industries design structured solutions.</p>
-                <button 
-                  className="btn btn-blue sidebar-action-btn"
-                  onClick={() => setShowSubmitView(true)}
-                >
-                  + Post Problem
-                </button>
-              </div>
+            <div className="sidebar-widget compact-cta-widget">
+              <span className="compact-cta-title">Identify a Problem?</span>
+              <button 
+                className="btn btn-blue sidebar-action-btn"
+                onClick={() => setShowSubmitView(true)}
+              >
+                + Post Problem
+              </button>
             </div>
 
             {/* Category Filters */}

@@ -109,36 +109,6 @@ export function Navbar({
           )}
         </div>
 
-        {/* Global Search Bar (Highlighted in Green) */}
-        <div className="navbar-search-bar">
-          <span className="navbar-search-icon">🔍</span>
-          <input 
-            type="text"
-            placeholder="Search problems by title..."
-            value={currentQuery}
-            onChange={(e) => handleQueryChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                if (activePage === 'landing') {
-                  const targetPage = currentUser ? `/${currentUser.role}.html` : '/citizen.html';
-                  window.location.href = `${targetPage}?search=${encodeURIComponent(currentQuery || e.target.value)}`;
-                }
-              }
-            }}
-            className="navbar-search-input"
-          />
-          {currentQuery && (
-            <button 
-              type="button" 
-              className="navbar-search-clear"
-              onClick={() => handleQueryChange('')}
-              title="Clear search"
-              aria-label="Clear search"
-            >
-              ✕
-            </button>
-          )}
-        </div>
 
         {/* Center Navigation Links */}
         <nav className="navbar-nav-links">
