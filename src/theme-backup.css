@@ -1,0 +1,131 @@
+/**
+ * THEME & COLOR PALETTE BACKUP
+ * Created on: 2026-09-05
+ * Project: First Look - Public Problem Solving Platform
+ * File: src/theme-backup.css
+ * 
+ * This file serves as a safe backup of the original color variables and themes.
+ * You can restore these exact values at any time.
+ */
+
+/* =========================================================
+   1. ORIGINAL LIGHT THEME (:root)
+   ========================================================= */
+:root {
+  /* Backgrounds */
+  --bg-body: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-secondary: #F1F5F9;
+  --bg-card: #FFFFFF;
+
+  /* Borders */
+  --border-color: #E2E8F0;
+  --border-subtle: #F1F5F9;
+
+  /* Typography Colors */
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
+
+  /* Accent & Brand Colors */
+  --accent-blue: #1855F4;
+  --accent-blue-hover: #1243C7;
+  --accent-blue-subtle: #EFF6FF;
+  --accent-blue-border: #BFDBFE;
+  --primary-color: #2563EB;
+
+  /* Hero Section */
+  --hero-bg: #0A1128;
+  --hero-text: #FFFFFF;
+  --hero-border: #1E293B;
+
+  /* Problem Status Tokens */
+  --status-open-bg: #ECFDF5;
+  --status-open-text: #059669;
+  --status-open-border: #A7F3D0;
+
+  --status-prog-bg: #FFFBEB;
+  --status-prog-text: #D97706;
+  --status-prog-border: #FDE68A;
+
+  --status-resolved-bg: #EFF6FF;
+  --status-resolved-text: #2563EB;
+  --status-resolved-border: #BFDBFE;
+
+  /* Role Badges */
+  --badge-citz-bg: #E0E7FF;
+  --badge-citz-text: #3730A3;
+
+  --badge-uni-bg: #F3E8FF;
+  --badge-uni-text: #6B21A8;
+
+  --badge-inds-bg: #DCFCE7;
+  --badge-inds-text: #166534;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* =========================================================
+   2. ORIGINAL DARK THEME ([data-theme="dark"])
+   ========================================================= */
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg-body: #0B1120;
+  --bg-surface: #111827;
+  --bg-secondary: #1E293B;
+  --bg-card: #131D31;
+
+  /* Borders */
+  --border-color: #1F293D;
+  --border-subtle: #263248;
+
+  /* Typography Colors */
+  --text-primary: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+
+  /* Accent & Brand Colors */
+  --accent-blue: #2563EB;
+  --accent-blue-hover: #3B82F6;
+  --accent-blue-subtle: #1E293B;
+  --accent-blue-border: #1D4ED8;
+  --primary-color: #2563EB;
+
+  /* Hero Section */
+  --hero-bg: #0F172A;
+  --hero-text: #FFFFFF;
+  --hero-border: #334155;
+
+  /* Problem Status Tokens */
+  --status-open-bg: rgba(5, 150, 105, 0.15);
+  --status-open-text: #34D399;
+  --status-open-border: rgba(52, 211, 153, 0.3);
+
+  --status-prog-bg: rgba(217, 119, 6, 0.15);
+  --status-prog-text: #FBBF24;
+  --status-prog-border: rgba(251, 191, 36, 0.3);
+
+  --status-resolved-bg: rgba(37, 99, 235, 0.15);
+  --status-resolved-text: #60A5FA;
+  --status-resolved-border: rgba(96, 165, 250, 0.3);
+
+  /* Role Badges */
+  --badge-citz-bg: rgba(99, 102, 241, 0.2);
+  --badge-citz-text: #A5B4FC;
+
+  --badge-uni-bg: rgba(168, 85, 247, 0.2);
+  --badge-uni-text: #D8B4FE;
+
+  --badge-inds-bg: rgba(34, 197, 94, 0.2);
+  --badge-inds-text: #86EFAC;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+}

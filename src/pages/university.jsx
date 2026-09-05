@@ -9,7 +9,7 @@ import { supabase } from '../utils/supabase';
 import '../index.css';
 
 function UniversityPage() {
-  const [theme, setTheme] = useState(() => localStorage.getItem('fl_theme') || 'light');
+  const [theme, setTheme] = useState(() => localStorage.getItem('fl_theme') || 'dark');
   
   // Strictly null if not logged in (NO automatic demo account fallback!)
   const [account, setAccount] = useState(() => {
