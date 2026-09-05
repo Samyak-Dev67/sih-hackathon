@@ -40,6 +40,12 @@ export function UniversityDashboard({
         (fetched || []).forEach(team => {
           (team.members || []).forEach(m => {
             if (m && (m.id || m.email || m.name)) {
+              if (currentAccount?.id && m.university_id && String(m.university_id) !== String(currentAccount.id)) {
+                return;
+              }
+              if (currentAccount?.id && m.universityId && String(m.universityId) !== String(currentAccount.id)) {
+                return;
+              }
               const key = m.id || m.email || m.name;
               if (!seen.has(key)) {
                 seen.add(key);
@@ -361,6 +367,7 @@ export function UniversityDashboard({
                     currentAccountId={currentAccount?.id}
                     currentAccount={currentAccount}
                     onOpenWorkspace={onOpenWorkspace}
+                    onAcceptChallenge={onAcceptChallenge}
                   />
                 ))
               )}

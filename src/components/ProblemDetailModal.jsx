@@ -184,9 +184,15 @@ export function ProblemDetailModal({
     }
   };
 
-  const isMyUniversityAccepted = acceptedClaim && (
-    acceptedClaim.universityId === currentAccount?.id ||
-    acceptedClaim.universityId === 'demo-uni'
+  const isMyUniversityAccepted = Boolean(
+    acceptedClaim && 
+    currentAccount?.id && 
+    acceptedClaim.universityId === currentAccount.id
+  );
+
+  const isLockedByOtherUniversity = Boolean(
+    acceptedClaim && 
+    (!currentAccount?.id || acceptedClaim.universityId !== currentAccount.id)
   );
 
   const isMyIndustryFunded = acceptedClaim?.fundedByIndustry && (
@@ -201,7 +207,22 @@ export function ProblemDetailModal({
         <div className="modal-header">
           <div className="modal-header-meta">
             {acceptedClaim ? (
-              <span className="tag-pill status-accepted-badge">ACCEPTED</span>
+              <>
+                <span className="tag-pill status-accepted-badge">ACCEPTED</span>
+                {isLockedByOtherUniversity && userRole === 'university' && (
+                  <span 
+                    className="tag-pill badge-locked" 
+                    style={{ 
+                      background: 'rgba(239, 68, 68, 0.15)', 
+                      color: '#ef4444', 
+                      border: '1px solid rgba(239, 68, 68, 0.35)', 
+                      fontWeight: 700 
+                    }}
+                  >
+                    LOCKED
+                  </span>
+                )}
+              </>
             ) : (
               <span className={`tag-pill ${currentStatus === 'Resolved' ? 'status-resolved-badge' : 'status-open-badge'}`}>
                 {currentStatus.toUpperCase()}
@@ -447,6 +468,62 @@ export function ProblemDetailModal({
                     <img src={img} alt={title} style={{ maxWidth: '100%', height: 'auto' }} />
                   </div>
                 )}
+
+                {/* Research Status Banner & Progress Bar if Accepted */}
+                {acceptedClaim && (
+                  <div 
+                    className="detail-claim-status-box"
+                    style={{
+                      marginTop: '1rem',
+                      marginBottom: '0.85rem',
+                      padding: '0.9rem 1.15rem',
+                      borderRadius: '8px',
+                      background: isLockedByOtherUniversity 
+                        ? 'rgba(239, 68, 68, 0.07)' 
+                        : 'rgba(56, 189, 248, 0.08)',
+                      border: `1px solid ${isLockedByOtherUniversity ? 'rgba(239, 68, 68, 0.28)' : 'rgba(56, 189, 248, 0.28)'}`
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.45rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span 
+                          style={{ 
+                            fontWeight: 700, 
+                            fontSize: '0.82rem', 
+                            textTransform: 'uppercase', 
+                            letterSpacing: '0.04em',
+                            color: isLockedByOtherUniversity ? '#ef4444' : '#38bdf8' 
+                          }}
+                        >
+                          {isLockedByOtherUniversity ? 'Locked • Claimed by Another University' : 'Active University Workspace'}
+                        </span>
+                        <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
+                          • {acceptedClaim.universityName}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: isLockedByOtherUniversity ? '#ef4444' : '#38bdf8' }}>
+                        Progress: {acceptedClaim.progress || 0}%
+                      </span>
+                    </div>
+
+                    <div style={{ width: '100%', height: '6px', background: 'var(--border-color)', borderRadius: '999px', overflow: 'hidden', marginBottom: '0.5rem' }}>
+                      <div 
+                        style={{ 
+                          width: `${Math.min(acceptedClaim.progress || 0, 100)}%`, 
+                          height: '100%', 
+                          background: isLockedByOtherUniversity ? '#ef4444' : '#38bdf8',
+                          transition: 'width 0.3s ease' 
+                        }} 
+                      />
+                    </div>
+
+                    {isLockedByOtherUniversity && userRole === 'university' && (
+                      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
+                        This civic problem was accepted by {acceptedClaim.universityName} and is locked. Other university accounts cannot accept or claim this problem.
+                      </p>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
@@ -497,9 +574,24 @@ export function ProblemDetailModal({
                       Open Problem Workspace →
                     </button>
                   ) : (
-                    <span className="tag-pill badge-locked" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '0.4rem 0.85rem', fontSize: '0.82rem', fontWeight: 700 }}>
+                    <button 
+                      type="button" 
+                      className="btn btn-outline"
+                      disabled
+                      style={{ 
+                        opacity: 0.65, 
+                        cursor: 'not-allowed', 
+                        borderColor: 'rgba(239, 68, 68, 0.4)', 
+                        color: '#ef4444', 
+                        background: 'rgba(239, 68, 68, 0.08)', 
+                        fontWeight: 600,
+                        fontSize: '0.84rem',
+                        padding: '0.45rem 0.95rem'
+                      }}
+                      title={`Locked: Accepted by ${acceptedClaim.universityName}`}
+                    >
                       Locked • Accepted by {acceptedClaim.universityName}
-                    </span>
+                    </button>
                   )}
                 </>
               )}

@@ -111,9 +111,15 @@ function UniversityPage() {
   // University workspace claim handler
   const handleAcceptChallenge = (post) => {
     if (!account) return;
-    postService.acceptChallenge(post, account);
-    setActiveWorkspacePostId(post.id);
-    setSelectedPost(null);
+    try {
+      const claim = postService.acceptChallenge(post, account);
+      if (claim) {
+        setActiveWorkspacePostId(post.id);
+        setSelectedPost(null);
+      }
+    } catch (err) {
+      alert(err.message || 'This civic challenge has already been accepted by another university and is locked.');
+    }
   };
 
   const handleOpenWorkspace = (postId) => {

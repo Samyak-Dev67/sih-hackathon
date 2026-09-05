@@ -76,12 +76,18 @@ export function TeamManagement({
       const fetchedTeams = await fetchUniversityTeams(universityId);
       setTeams(fetchedTeams || []);
 
-      // Derive distinct students list from members JSON across all teams
+      // Derive distinct students list from members JSON across this university's teams only
       const allMembers = [];
       const seenIds = new Set();
       (fetchedTeams || []).forEach(team => {
         (team.members || []).forEach(m => {
           if (m && (m.id || m.email || m.name)) {
+            if (universityId && m.university_id && String(m.university_id) !== String(universityId)) {
+              return;
+            }
+            if (universityId && m.universityId && String(m.universityId) !== String(universityId)) {
+              return;
+            }
             const key = m.id || m.email || m.name;
             if (!seenIds.has(key)) {
               seenIds.add(key);
@@ -100,7 +106,7 @@ export function TeamManagement({
     }
   };
 
-  const availableAcceptedChallenges = acceptedChallenges.length > 0 ? acceptedChallenges : acceptedProblems;
+  const availableAcceptedChallenges = acceptedChallenges;
 
   useEffect(() => {
     reloadData();
@@ -191,7 +197,8 @@ export function TeamManagement({
         description: teamFormData.description?.trim() || '',
         department: teamFormData.department?.trim() || 'General Engineering',
         associated_to: teamFormData.assignedProblemIds.map(String),
-        members: selectedMembers
+        members: selectedMembers,
+        universityName: currentAccount?.name || 'University Laboratory'
       };
 
       if (editingTeam) {
@@ -383,9 +390,11 @@ export function TeamManagement({
       {/* Header Banner */}
       <div className="uni-workspace-header-row">
         <div>
-          <h1 className="uni-workspace-title">Team Management</h1>
+          <h1 className="uni-workspace-title">
+            Team Management: {currentAccount?.name || 'University Laboratory'}
+          </h1>
           <p className="uni-workspace-subtitle">
-            Assemble student research teams, designate specific roles, and assign teams to multiple accepted challenges.
+            Assemble student research teams, designate specific roles, and assign teams to challenges accepted by {currentAccount?.name || 'your university'}.
           </p>
         </div>
         <div className="uni-team-header-actions">

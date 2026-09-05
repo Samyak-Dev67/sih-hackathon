@@ -1514,8 +1514,7 @@ export function getAcceptedChallenges(universityId = null) {
       localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(INITIAL_ACCEPTED_CHALLENGES));
     }
     if (universityId) {
-      const filtered = list.filter(c => c.universityId === universityId || c.universityId === 'demo-uni' || !c.universityId);
-      return filtered.length > 0 ? filtered : list;
+      return list.filter(c => c.universityId === universityId);
     }
     return list;
   } catch (e) {
@@ -1542,7 +1541,12 @@ export function acceptChallenge(post, universityAccount) {
   const list = getAcceptedChallenges();
   const existing = list.find(c => String(c.postId) === String(post.id));
   if (existing) {
-    return existing;
+    if (existing.universityId === universityAccount.id) {
+      return existing;
+    }
+    const lockedMsg = `This problem has already been accepted by ${existing.universityName || 'another university'} and is locked.`;
+    console.warn(lockedMsg);
+    throw new Error(lockedMsg);
   }
 
   const initialMilestones = [
@@ -1645,6 +1649,28 @@ export function isProblemLocked(postId) {
   return list.some(c => String(c.postId) === String(postId));
 }
 
+export function getProblemLockInfo(postId) {
+  if (!postId) return null;
+  const list = getAcceptedChallenges();
+  const claim = list.find(c => String(c.postId) === String(postId));
+  if (!claim) return null;
+  return {
+    isLocked: true,
+    universityId: claim.universityId,
+    universityName: claim.universityName,
+    progress: claim.progress || 0,
+    acceptedAt: claim.acceptedAt
+  };
+}
+
+export function isProblemAcceptedByOtherUniversity(postId, currentUniversityId) {
+  if (!postId) return false;
+  const list = getAcceptedChallenges();
+  const claim = list.find(c => String(c.postId) === String(postId));
+  if (!claim) return false;
+  return Boolean(currentUniversityId && claim.universityId !== currentUniversityId);
+}
+
 export function fundChallenge(postId, industryAccount) {
   if (!postId || !industryAccount) return null;
   const list = getAcceptedChallenges();
@@ -1673,7 +1699,7 @@ export function canAccessWorkspace(postId, account) {
 
   // University check: Only the university that accepted it
   if (account.role === 'university') {
-    return claim.universityId === account.id || claim.universityId === 'demo-uni';
+    return claim.universityId === account.id;
   }
 
   // Industry check: Exclusively visible if industry accepts to fund it
@@ -1741,12 +1767,12 @@ const DEFAULT_TEAMS = [
   }
 ];
 
-let memoryTeamsCache = null;
+let memoryTeamsCache = {};
 
 /**
- * Format team object from Supabase row
+ * Format team object from Supabase row, isolating by requesting university if specified
  */
-function formatTeamRow(row) {
+function formatTeamRow(row, requestingUniversityId = null) {
   if (!row) return null;
   const associated = Array.isArray(row.associated_to) ? row.associated_to.map(String) : [];
   
@@ -1754,35 +1780,150 @@ function formatTeamRow(row) {
   let membersList = [];
   let description = '';
   let department = 'Multidisciplinary Team';
+  let teamUniversityId = null;
+  let teamUniversityName = '';
+
+  if (row.university_id) {
+    teamUniversityId = String(row.university_id);
+  }
 
   if (Array.isArray(row.members)) {
     membersList = row.members;
+    const withUni = row.members.find(m => m && (m.university_id || m.universityId));
+    if (withUni) {
+      teamUniversityId = String(withUni.university_id || withUni.universityId);
+    }
   } else if (row.members && typeof row.members === 'object') {
+    if (row.members.university_id || row.members.universityId) {
+      teamUniversityId = String(row.members.university_id || row.members.universityId);
+    }
+    if (row.members.university_name || row.members.universityName) {
+      teamUniversityName = row.members.university_name || row.members.universityName;
+    }
     if (Array.isArray(row.members.students)) {
       membersList = row.members.students;
     } else if (Array.isArray(row.members.list)) {
       membersList = row.members.list;
+    } else if (Array.isArray(row.members.members)) {
+      membersList = row.members.members;
     }
     if (row.members.description) description = row.members.description;
     if (row.members.department) department = row.members.department;
   }
+
+  // If team has assigned problems in associated_to, correlate with accepted challenges
+  if (!teamUniversityId && associated.length > 0) {
+    const allClaims = getAcceptedChallenges();
+    const matchingClaim = allClaims.find(c => associated.includes(String(c.postId)));
+    if (matchingClaim && matchingClaim.universityId) {
+      teamUniversityId = String(matchingClaim.universityId);
+      teamUniversityName = matchingClaim.universityName || '';
+    }
+  }
+
+  // Correlate with local storage team IDs for university ownership
+  if (!teamUniversityId && requestingUniversityId) {
+    try {
+      const localIdsRaw = localStorage.getItem(`fl_uni_team_ids_${requestingUniversityId}`);
+      if (localIdsRaw) {
+        const ids = JSON.parse(localIdsRaw);
+        if (Array.isArray(ids) && ids.some(id => String(id) === String(row.id))) {
+          teamUniversityId = String(requestingUniversityId);
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Filter members: Never allow students from another university into this university's team
+  const targetUniId = requestingUniversityId || teamUniversityId;
+  const filteredMembers = membersList.filter(m => {
+    if (!m) return false;
+    if (targetUniId && m.university_id && String(m.university_id) !== String(targetUniId)) {
+      return false;
+    }
+    if (targetUniId && m.universityId && String(m.universityId) !== String(targetUniId)) {
+      return false;
+    }
+    return true;
+  });
 
   return {
     id: row.id,
     name: row.name || 'Untitled Team',
     description: description,
     department: department,
+    universityId: teamUniversityId,
+    universityName: teamUniversityName,
     associated_to: associated,
     assignedProblemIds: associated,
-    members: membersList,
-    studentIds: membersList.map(m => m.id || m.email || m.name),
+    members: filteredMembers,
+    studentIds: filteredMembers.map(m => m.id || m.email || m.name),
     created_at: row.created_at
   };
 }
 
 /**
- * Fetch all teams from Supabase 'teams' table
- * Throws on failure with clear error details.
+ * Verifies if a team belongs strictly to a specified university
+ */
+export function isTeamOwnedByUniversity(team, universityId) {
+  if (!team || !universityId) return false;
+
+  // 1. Direct universityId match on formatted team
+  if (team.universityId && String(team.universityId) === String(universityId)) {
+    return true;
+  }
+
+  // 2. Stored in this university's local team IDs registry
+  try {
+    const localIdsRaw = localStorage.getItem(`fl_uni_team_ids_${universityId}`);
+    if (localIdsRaw) {
+      const ids = JSON.parse(localIdsRaw);
+      if (Array.isArray(ids) && ids.some(id => String(id) === String(team.id))) {
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  // 3. Team assigned to a problem accepted by this university
+  const acceptedChallenges = getAcceptedChallenges(universityId);
+  const myProblemIds = new Set(acceptedChallenges.map(c => String(c.postId)));
+  const teamProblemIds = (team.associated_to || team.assignedProblemIds || []).map(String);
+  if (teamProblemIds.length > 0 && teamProblemIds.some(pid => myProblemIds.has(pid))) {
+    return true;
+  }
+
+  // 4. Team has members tagged with this universityId and none tagged with another
+  if (Array.isArray(team.members) && team.members.length > 0) {
+    const hasMyStudent = team.members.some(m => 
+      m && (String(m.university_id) === String(universityId) || String(m.universityId) === String(universityId))
+    );
+    const hasOtherStudent = team.members.some(m => 
+      m && (m.university_id || m.universityId) && 
+      String(m.university_id || m.universityId) !== String(universityId)
+    );
+    if (hasMyStudent && !hasOtherStudent) {
+      return true;
+    }
+  }
+
+  // 5. If registered under another university's local registry, reject
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('fl_uni_team_ids_') && key !== `fl_uni_team_ids_${universityId}`) {
+        const otherIds = JSON.parse(localStorage.getItem(key) || '[]');
+        if (Array.isArray(otherIds) && otherIds.some(id => String(id) === String(team.id))) {
+          return false;
+        }
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+/**
+ * Fetch teams strictly isolated for a given university from Supabase
  */
 export async function fetchUniversityTeams(universityId = null) {
   if (!supabase) {
@@ -1791,7 +1932,7 @@ export async function fetchUniversityTeams(universityId = null) {
     throw err;
   }
 
-  console.log('📡 [Supabase SELECT]: Fetching research teams from "teams" table...');
+  console.log(`📡 [Supabase SELECT]: Fetching research teams from "teams" table for university "${universityId}"...`);
   const { data, error } = await supabase
     .from('teams')
     .select('*')
@@ -1813,26 +1954,52 @@ export async function fetchUniversityTeams(universityId = null) {
     throw new Error(`Failed to load teams from Supabase: ${error.message} (code: ${error.code || 'unknown'})`);
   }
 
-  const formatted = (data || []).map(formatTeamRow);
-  memoryTeamsCache = formatted;
+  const formatted = (data || []).map(row => formatTeamRow(row, universityId));
+
+  if (universityId) {
+    const filtered = formatted.filter(t => isTeamOwnedByUniversity(t, universityId));
+    try {
+      localStorage.setItem(`fl_uni_teams_${universityId}`, JSON.stringify(filtered));
+    } catch (e) {}
+    if (!memoryTeamsCache || typeof memoryTeamsCache !== 'object') memoryTeamsCache = {};
+    memoryTeamsCache[universityId] = filtered;
+    return filtered;
+  }
+
   return formatted;
 }
 
 export function getUniversityTeams(universityId = null) {
-  if (Array.isArray(memoryTeamsCache)) {
-    return memoryTeamsCache;
+  if (universityId) {
+    if (memoryTeamsCache && Array.isArray(memoryTeamsCache[universityId])) {
+      return memoryTeamsCache[universityId];
+    }
+    try {
+      const raw = localStorage.getItem(`fl_uni_teams_${universityId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
   }
   return [];
 }
 
 export function getUniversityStudents(universityId = null) {
-  const currentTeams = Array.isArray(memoryTeamsCache) ? memoryTeamsCache : [];
+  const currentTeams = getUniversityTeams(universityId);
   const uniqueStudents = [];
   const seenIds = new Set();
   
   currentTeams.forEach(team => {
     (team.members || []).forEach(member => {
       if (member && (member.id || member.email || member.name)) {
+        if (universityId && member.university_id && String(member.university_id) !== String(universityId)) {
+          return;
+        }
+        if (universityId && member.universityId && String(member.universityId) !== String(universityId)) {
+          return;
+        }
         const key = member.id || member.email || member.name;
         if (!seenIds.has(key)) {
           seenIds.add(key);
@@ -1860,25 +2027,37 @@ export async function createUniversityTeam(universityId, teamData) {
     ? teamData.associated_to.map(String)
     : (Array.isArray(teamData.assignedProblemIds) ? teamData.assignedProblemIds.map(String) : []);
 
-  let membersPayload = [];
+  let membersList = [];
   if (Array.isArray(teamData.members)) {
-    membersPayload = teamData.members;
+    membersList = teamData.members;
   } else if (Array.isArray(teamData.students)) {
-    membersPayload = teamData.students;
+    membersList = teamData.students;
   } else if (Array.isArray(teamData.studentIds)) {
-    // Look up students from cache or construct
     const allStudents = getUniversityStudents(universityId);
-    membersPayload = allStudents.filter(s => teamData.studentIds.includes(s.id));
+    membersList = allStudents.filter(s => teamData.studentIds.includes(s.id));
   }
 
-  // Exact columns for the 'teams' table schema: name, associated_to, members
+  const taggedStudents = membersList.map(m => ({
+    ...m,
+    university_id: universityId,
+    universityId: universityId
+  }));
+
+  const membersMeta = {
+    university_id: universityId,
+    university_name: teamData.universityName || '',
+    description: (teamData.description || '').trim(),
+    department: (teamData.department || 'Multidisciplinary Team').trim(),
+    students: taggedStudents
+  };
+
   const payload = {
     name: teamData.name.trim(),
     associated_to: associated,
-    members: membersPayload
+    members: membersMeta
   };
 
-  console.log('📡 [Supabase INSERT]: Adding new team to "teams" table:', payload);
+  console.log('📡 [Supabase INSERT]: Adding new team to "teams" table for university:', universityId, payload);
   const { data, error } = await supabase
     .from('teams')
     .insert([payload])
@@ -1896,12 +2075,25 @@ export async function createUniversityTeam(universityId, teamData) {
     throw new Error('Supabase INSERT returned no data. Check if an RLS SELECT policy is preventing reading the inserted row.');
   }
 
-  const created = formatTeamRow(data[0]);
-  if (memoryTeamsCache) {
-    memoryTeamsCache = [created, ...memoryTeamsCache];
-  } else {
-    memoryTeamsCache = [created];
-  }
+  const created = formatTeamRow(data[0], universityId);
+
+  try {
+    const key = `fl_uni_team_ids_${universityId}`;
+    const raw = localStorage.getItem(key);
+    const ids = raw ? JSON.parse(raw) : [];
+    if (!ids.some(id => String(id) === String(created.id))) {
+      ids.push(String(created.id));
+      localStorage.setItem(key, JSON.stringify(ids));
+    }
+    const current = getUniversityTeams(universityId);
+    const updated = [created, ...current.filter(t => String(t.id) !== String(created.id))];
+    localStorage.setItem(`fl_uni_teams_${universityId}`, JSON.stringify(updated));
+  } catch (e) {}
+
+  if (!memoryTeamsCache || typeof memoryTeamsCache !== 'object') memoryTeamsCache = {};
+  if (!Array.isArray(memoryTeamsCache[universityId])) memoryTeamsCache[universityId] = [];
+  memoryTeamsCache[universityId] = [created, ...memoryTeamsCache[universityId].filter(t => String(t.id) !== String(created.id))];
+
   return created;
 }
 
@@ -1927,13 +2119,34 @@ export async function updateUniversityTeam(universityId, teamId, teamData) {
     payload.associated_to = teamData.assignedProblemIds.map(String);
   }
 
-  if (Array.isArray(teamData.members)) {
-    payload.members = teamData.members;
-  } else if (Array.isArray(teamData.students)) {
-    payload.members = teamData.students;
-  } else if (Array.isArray(teamData.studentIds)) {
-    const allStudents = getUniversityStudents(universityId);
-    payload.members = allStudents.filter(s => teamData.studentIds.includes(s.id));
+  if (teamData.members !== undefined) {
+    let rawMembers = teamData.members;
+    let studentsList = [];
+    let desc = '';
+    let dept = '';
+    if (Array.isArray(rawMembers)) {
+      studentsList = rawMembers;
+    } else if (rawMembers && typeof rawMembers === 'object') {
+      studentsList = rawMembers.students || rawMembers.list || rawMembers.members || [];
+      desc = rawMembers.description || '';
+      dept = rawMembers.department || '';
+    } else if (Array.isArray(teamData.students)) {
+      studentsList = teamData.students;
+    } else if (Array.isArray(teamData.studentIds)) {
+      const allStudents = getUniversityStudents(universityId);
+      studentsList = allStudents.filter(s => teamData.studentIds.includes(s.id));
+    }
+
+    payload.members = {
+      university_id: universityId,
+      description: desc || teamData.description || '',
+      department: dept || teamData.department || 'Multidisciplinary Team',
+      students: studentsList.map(s => ({
+        ...s,
+        university_id: s.university_id || universityId,
+        universityId: s.universityId || universityId
+      }))
+    };
   }
 
   const targetId = !isNaN(Number(teamId)) ? Number(teamId) : teamId;
@@ -1953,9 +2166,15 @@ export async function updateUniversityTeam(universityId, teamId, teamData) {
     throw new Error(`Failed to update team in Supabase: ${error.message} (code: ${error.code || 'unknown'})`);
   }
 
-  const updated = formatTeamRow(data && data.length > 0 ? data[0] : { id: targetId, ...payload });
-  if (memoryTeamsCache) {
-    memoryTeamsCache = memoryTeamsCache.map(t => String(t.id) === String(targetId) ? updated : t);
+  const updated = formatTeamRow(data && data.length > 0 ? data[0] : { id: targetId, ...payload }, universityId);
+  try {
+    const current = getUniversityTeams(universityId);
+    const updatedList = current.map(t => String(t.id) === String(targetId) ? updated : t);
+    localStorage.setItem(`fl_uni_teams_${universityId}`, JSON.stringify(updatedList));
+  } catch (e) {}
+
+  if (memoryTeamsCache && Array.isArray(memoryTeamsCache[universityId])) {
+    memoryTeamsCache[universityId] = memoryTeamsCache[universityId].map(t => String(t.id) === String(targetId) ? updated : t);
   }
   return updated;
 }
@@ -1987,8 +2206,20 @@ export async function deleteUniversityTeam(universityId, teamId) {
     throw new Error(`Failed to delete team from Supabase: ${error.message} (code: ${error.code || 'unknown'})`);
   }
 
-  if (memoryTeamsCache) {
-    memoryTeamsCache = memoryTeamsCache.filter(t => String(t.id) !== String(targetId));
+  try {
+    const key = `fl_uni_team_ids_${universityId}`;
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const ids = JSON.parse(raw).filter(id => String(id) !== String(targetId));
+      localStorage.setItem(key, JSON.stringify(ids));
+    }
+    const current = getUniversityTeams(universityId);
+    const updated = current.filter(t => String(t.id) !== String(targetId));
+    localStorage.setItem(`fl_uni_teams_${universityId}`, JSON.stringify(updated));
+  } catch (e) {}
+
+  if (memoryTeamsCache && Array.isArray(memoryTeamsCache[universityId])) {
+    memoryTeamsCache[universityId] = memoryTeamsCache[universityId].filter(t => String(t.id) !== String(targetId));
   }
   return { success: true, id: targetId };
 }
@@ -2043,7 +2274,9 @@ export async function addUniversityStudent(universityId, studentData) {
     role: studentData.role?.trim() || 'Student Researcher',
     department: studentData.department?.trim() || 'Engineering & Technology',
     email: studentData.email?.trim() || '',
-    initials
+    initials,
+    university_id: universityId,
+    universityId: universityId
   };
 
   const targetTeamIds = Array.isArray(studentData.teamIds) ? studentData.teamIds : [];
@@ -2064,10 +2297,36 @@ export async function addUniversityStudent(universityId, studentData) {
       throw new Error(`Failed to fetch team #${targetId} to add student: ${fetchErr.message}`);
     }
 
-    const currentMembers = Array.isArray(currentTeam.members) ? currentTeam.members : [];
-    const updatedMembers = [...currentMembers, newStudent];
+    let currentMembers = [];
+    let desc = '';
+    let dept = '';
+    let teamUniId = universityId;
 
-    await updateUniversityTeam(universityId, targetId, { members: updatedMembers });
+    if (Array.isArray(currentTeam.members)) {
+      currentMembers = currentTeam.members;
+    } else if (currentTeam.members && typeof currentTeam.members === 'object') {
+      currentMembers = currentTeam.members.students || currentTeam.members.list || currentTeam.members.members || [];
+      desc = currentTeam.members.description || '';
+      dept = currentTeam.members.department || '';
+      if (currentTeam.members.university_id) teamUniId = currentTeam.members.university_id;
+    }
+
+    // Isolate members: keep only members belonging to this university
+    const cleanMembers = currentMembers.filter(m => {
+      if (!m) return false;
+      if (m.university_id && String(m.university_id) !== String(universityId)) return false;
+      if (m.universityId && String(m.universityId) !== String(universityId)) return false;
+      return true;
+    });
+
+    const updatedMembersPayload = {
+      university_id: teamUniId || universityId,
+      description: desc,
+      department: dept,
+      students: [...cleanMembers, newStudent]
+    };
+
+    await updateUniversityTeam(universityId, targetId, { members: updatedMembersPayload });
   }
 
   return newStudent;
@@ -2196,6 +2455,8 @@ export const postService = {
   toggleMilestone,
   deleteMilestone,
   isProblemLocked,
+  getProblemLockInfo,
+  isProblemAcceptedByOtherUniversity,
   getUniversityStudents,
   addUniversityStudent,
   updateUniversityStudent,

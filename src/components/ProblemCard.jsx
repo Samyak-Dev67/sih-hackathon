@@ -10,7 +10,8 @@ export function ProblemCard({
   currentAccount,
   onDeleteProblem,
   onToggleResolve,
-  onOpenWorkspace
+  onOpenWorkspace,
+  onAcceptChallenge
 }) {
   const {
     id,
@@ -134,7 +135,22 @@ export function ProblemCard({
 
           <div className="status-container" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
             {acceptedClaim ? (
-              <span className="tag-pill status-accepted-badge">ACCEPTED</span>
+              <>
+                <span className="tag-pill status-accepted-badge">ACCEPTED</span>
+                {currentAccount?.role === 'university' && acceptedClaim.universityId !== currentAccount?.id && (
+                  <span 
+                    className="tag-pill badge-locked" 
+                    style={{ 
+                      background: 'rgba(239, 68, 68, 0.12)', 
+                      color: '#ef4444', 
+                      border: '1px solid rgba(239, 68, 68, 0.3)', 
+                      fontWeight: 700 
+                    }}
+                  >
+                    LOCKED
+                  </span>
+                )}
+              </>
             ) : isResolved ? (
               <span className="tag-pill status-resolved-badge">RESOLVED</span>
             ) : (
@@ -218,9 +234,9 @@ export function ProblemCard({
             )}
           </div>
 
-          {acceptedClaim && (
+          {acceptedClaim ? (
             <>
-              {acceptedClaim.universityId === currentAccount?.id || acceptedClaim.universityId === 'demo-uni' ? (
+              {acceptedClaim.universityId === currentAccount?.id ? (
                 onOpenWorkspace && (
                   <button
                     type="button"
@@ -235,11 +251,35 @@ export function ProblemCard({
                   </button>
                 )
               ) : currentAccount?.role === 'university' ? (
-                <span className="tag-pill badge-locked" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }}>
+                <span 
+                  className="tag-pill badge-locked" 
+                  style={{ 
+                    fontSize: '0.74rem', 
+                    color: '#ef4444', 
+                    border: '1px solid rgba(239, 68, 68, 0.35)', 
+                    background: 'rgba(239, 68, 68, 0.08)', 
+                    fontWeight: 600 
+                  }}
+                  title={`Accepted by ${acceptedClaim.universityName}. Locked for other universities.`}
+                >
                   Locked • {acceptedClaim.universityName}
                 </span>
               ) : null}
             </>
+          ) : (
+            currentAccount?.role === 'university' && onAcceptChallenge && (
+              <button
+                type="button"
+                className="btn btn-blue btn-sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAcceptChallenge(post);
+                }}
+                style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem', whiteSpace: 'nowrap' }}
+              >
+                Accept Challenge →
+              </button>
+            )
           )}
         </div>
       </div>
