@@ -1741,39 +1741,296 @@ const DEFAULT_TEAMS = [
   }
 ];
 
-function getStudentsKey(universityId) {
-  return `fl_students_${universityId || 'default'}`;
+let memoryTeamsCache = null;
+
+/**
+ * Format team object from Supabase row
+ */
+function formatTeamRow(row) {
+  if (!row) return null;
+  const associated = Array.isArray(row.associated_to) ? row.associated_to.map(String) : [];
+  
+  // Parse members JSON
+  let membersList = [];
+  let description = '';
+  let department = 'Multidisciplinary Team';
+
+  if (Array.isArray(row.members)) {
+    membersList = row.members;
+  } else if (row.members && typeof row.members === 'object') {
+    if (Array.isArray(row.members.students)) {
+      membersList = row.members.students;
+    } else if (Array.isArray(row.members.list)) {
+      membersList = row.members.list;
+    }
+    if (row.members.description) description = row.members.description;
+    if (row.members.department) department = row.members.department;
+  }
+
+  return {
+    id: row.id,
+    name: row.name || 'Untitled Team',
+    description: description,
+    department: department,
+    associated_to: associated,
+    assignedProblemIds: associated,
+    members: membersList,
+    studentIds: membersList.map(m => m.id || m.email || m.name),
+    created_at: row.created_at
+  };
 }
 
-function getTeamsKey(universityId) {
-  return `fl_teams_${universityId || 'default'}`;
+/**
+ * Fetch all teams from Supabase 'teams' table
+ * Throws on failure with clear error details.
+ */
+export async function fetchUniversityTeams(universityId = null) {
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('❌ [Supabase Connection Error]:', err.message);
+    throw err;
+  }
+
+  console.log('📡 [Supabase SELECT]: Fetching research teams from "teams" table...');
+  const { data, error } = await supabase
+    .from('teams')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('❌ [Supabase SELECT Error (teams)]:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    if (error.code === '42501') {
+      throw new Error(`Row Level Security (RLS) blocked reading the "teams" table (code: 42501). Add a SELECT policy in your Supabase dashboard.`);
+    }
+    if (error.code === '42P01') {
+      throw new Error(`Table "teams" does not exist in your Supabase database (code: 42P01). Please create the "teams" table.`);
+    }
+    throw new Error(`Failed to load teams from Supabase: ${error.message} (code: ${error.code || 'unknown'})`);
+  }
+
+  const formatted = (data || []).map(formatTeamRow);
+  memoryTeamsCache = formatted;
+  return formatted;
+}
+
+export function getUniversityTeams(universityId = null) {
+  if (Array.isArray(memoryTeamsCache)) {
+    return memoryTeamsCache;
+  }
+  return [];
 }
 
 export function getUniversityStudents(universityId = null) {
-  try {
-    const key = getStudentsKey(universityId);
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-      localStorage.setItem(key, JSON.stringify(DEFAULT_STUDENTS));
-      return DEFAULT_STUDENTS;
+  const currentTeams = Array.isArray(memoryTeamsCache) ? memoryTeamsCache : [];
+  const uniqueStudents = [];
+  const seenIds = new Set();
+  
+  currentTeams.forEach(team => {
+    (team.members || []).forEach(member => {
+      if (member && (member.id || member.email || member.name)) {
+        const key = member.id || member.email || member.name;
+        if (!seenIds.has(key)) {
+          seenIds.add(key);
+          uniqueStudents.push(member);
+        }
+      }
+    });
+  });
+
+  return uniqueStudents;
+}
+
+/**
+ * Create a new team in Supabase 'teams' table
+ */
+export async function createUniversityTeam(universityId, teamData) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized.');
+  }
+  if (!teamData || !teamData.name?.trim()) {
+    throw new Error('Team name is required.');
+  }
+
+  const associated = Array.isArray(teamData.associated_to)
+    ? teamData.associated_to.map(String)
+    : (Array.isArray(teamData.assignedProblemIds) ? teamData.assignedProblemIds.map(String) : []);
+
+  let membersPayload = [];
+  if (Array.isArray(teamData.members)) {
+    membersPayload = teamData.members;
+  } else if (Array.isArray(teamData.students)) {
+    membersPayload = teamData.students;
+  } else if (Array.isArray(teamData.studentIds)) {
+    // Look up students from cache or construct
+    const allStudents = getUniversityStudents(universityId);
+    membersPayload = allStudents.filter(s => teamData.studentIds.includes(s.id));
+  }
+
+  // Exact columns for the 'teams' table schema: name, associated_to, members
+  const payload = {
+    name: teamData.name.trim(),
+    associated_to: associated,
+    members: membersPayload
+  };
+
+  console.log('📡 [Supabase INSERT]: Adding new team to "teams" table:', payload);
+  const { data, error } = await supabase
+    .from('teams')
+    .insert([payload])
+    .select();
+
+  if (error) {
+    console.error('❌ [Supabase INSERT Error (teams)]:', error);
+    if (error.code === '42501') {
+      throw new Error(`Row Level Security (RLS) blocked inserting into "teams" table (code: 42501). Add an INSERT policy for authenticated/public users in Supabase.`);
     }
-    return JSON.parse(raw);
-  } catch (e) {
-    return DEFAULT_STUDENTS;
+    throw new Error(`Failed to create team in Supabase: ${error.message} (code: ${error.code || 'unknown'})`);
   }
+
+  if (!data || data.length === 0) {
+    throw new Error('Supabase INSERT returned no data. Check if an RLS SELECT policy is preventing reading the inserted row.');
+  }
+
+  const created = formatTeamRow(data[0]);
+  if (memoryTeamsCache) {
+    memoryTeamsCache = [created, ...memoryTeamsCache];
+  } else {
+    memoryTeamsCache = [created];
+  }
+  return created;
 }
 
-export function saveUniversityStudents(universityId, students) {
-  try {
-    localStorage.setItem(getStudentsKey(universityId), JSON.stringify(students));
-  } catch (e) {
-    console.error('Failed to save students:', e);
+/**
+ * Update an existing team in Supabase 'teams' table
+ */
+export async function updateUniversityTeam(universityId, teamId, teamData) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized.');
   }
+  if (!teamId) {
+    throw new Error('Team ID is required for update.');
+  }
+
+  const payload = {};
+  if (typeof teamData.name === 'string') {
+    payload.name = teamData.name.trim();
+  }
+
+  if (Array.isArray(teamData.associated_to)) {
+    payload.associated_to = teamData.associated_to.map(String);
+  } else if (Array.isArray(teamData.assignedProblemIds)) {
+    payload.associated_to = teamData.assignedProblemIds.map(String);
+  }
+
+  if (Array.isArray(teamData.members)) {
+    payload.members = teamData.members;
+  } else if (Array.isArray(teamData.students)) {
+    payload.members = teamData.students;
+  } else if (Array.isArray(teamData.studentIds)) {
+    const allStudents = getUniversityStudents(universityId);
+    payload.members = allStudents.filter(s => teamData.studentIds.includes(s.id));
+  }
+
+  const targetId = !isNaN(Number(teamId)) ? Number(teamId) : teamId;
+  console.log(`📡 [Supabase UPDATE]: Updating team #${targetId} in "teams" table:`, payload);
+
+  const { data, error } = await supabase
+    .from('teams')
+    .update(payload)
+    .eq('id', targetId)
+    .select();
+
+  if (error) {
+    console.error('❌ [Supabase UPDATE Error (teams)]:', error);
+    if (error.code === '42501') {
+      throw new Error(`Row Level Security (RLS) blocked updating "teams" table (code: 42501). Check UPDATE policy on "teams" in Supabase.`);
+    }
+    throw new Error(`Failed to update team in Supabase: ${error.message} (code: ${error.code || 'unknown'})`);
+  }
+
+  const updated = formatTeamRow(data && data.length > 0 ? data[0] : { id: targetId, ...payload });
+  if (memoryTeamsCache) {
+    memoryTeamsCache = memoryTeamsCache.map(t => String(t.id) === String(targetId) ? updated : t);
+  }
+  return updated;
 }
 
-export function addUniversityStudent(universityId, studentData) {
-  if (!studentData || !studentData.name?.trim()) return null;
-  const list = getUniversityStudents(universityId);
+/**
+ * Delete a team from Supabase 'teams' table
+ */
+export async function deleteUniversityTeam(universityId, teamId) {
+  if (!supabase) {
+    throw new Error('Supabase client is not initialized.');
+  }
+  if (!teamId) {
+    throw new Error('Team ID is required to delete.');
+  }
+
+  const targetId = !isNaN(Number(teamId)) ? Number(teamId) : teamId;
+  console.log(`📡 [Supabase DELETE]: Deleting team #${targetId} from "teams" table...`);
+
+  const { data, error } = await supabase
+    .from('teams')
+    .delete()
+    .eq('id', targetId);
+
+  if (error) {
+    console.error('❌ [Supabase DELETE Error (teams)]:', error);
+    if (error.code === '42501') {
+      throw new Error(`Row Level Security (RLS) blocked deleting from "teams" table (code: 42501). Check DELETE policy on "teams" in Supabase.`);
+    }
+    throw new Error(`Failed to delete team from Supabase: ${error.message} (code: ${error.code || 'unknown'})`);
+  }
+
+  if (memoryTeamsCache) {
+    memoryTeamsCache = memoryTeamsCache.filter(t => String(t.id) !== String(targetId));
+  }
+  return { success: true, id: targetId };
+}
+
+/**
+ * Toggle Problem Assignment for a team in Supabase
+ */
+export async function toggleTeamProblemAssignment(universityId, teamId, postId) {
+  if (!teamId || !postId) {
+    throw new Error('Team ID and Problem ID are required.');
+  }
+
+  const targetId = !isNaN(Number(teamId)) ? Number(teamId) : teamId;
+
+  // Fetch current team row to guarantee fresh list
+  const { data: teamRow, error: fetchErr } = await supabase
+    .from('teams')
+    .select('*')
+    .eq('id', targetId)
+    .single();
+
+  if (fetchErr) {
+    throw new Error(`Failed to fetch team #${targetId} to update problems: ${fetchErr.message}`);
+  }
+
+  const currentList = Array.isArray(teamRow.associated_to) ? teamRow.associated_to.map(String) : [];
+  const postStr = String(postId);
+  const nextList = currentList.includes(postStr)
+    ? currentList.filter(id => id !== postStr)
+    : [...currentList, postStr];
+
+  return await updateUniversityTeam(universityId, targetId, { associated_to: nextList });
+}
+
+/**
+ * Add a student to designated teams in Supabase 'teams' table
+ */
+export async function addUniversityStudent(universityId, studentData) {
+  if (!studentData || !studentData.name?.trim()) {
+    throw new Error('Student name is required.');
+  }
+
   const name = studentData.name.trim();
   const parts = name.split(' ');
   const initials = parts.length > 1
@@ -1781,7 +2038,7 @@ export function addUniversityStudent(universityId, studentData) {
     : name.slice(0, 2).toUpperCase();
 
   const newStudent = {
-    id: `stu-${Date.now()}`,
+    id: `stu-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     name,
     role: studentData.role?.trim() || 'Student Researcher',
     department: studentData.department?.trim() || 'Engineering & Technology',
@@ -1789,156 +2046,110 @@ export function addUniversityStudent(universityId, studentData) {
     initials
   };
 
-  const updated = [...list, newStudent];
-  saveUniversityStudents(universityId, updated);
+  const targetTeamIds = Array.isArray(studentData.teamIds) ? studentData.teamIds : [];
+  if (targetTeamIds.length === 0) {
+    throw new Error('Please select at least one team to assign this student researcher to.');
+  }
 
-  if (Array.isArray(studentData.teamIds) && studentData.teamIds.length > 0) {
-    const teams = getUniversityTeams(universityId);
-    const updatedTeams = teams.map(t => {
-      if (studentData.teamIds.includes(t.id) && !t.studentIds.includes(newStudent.id)) {
-        return { ...t, studentIds: [...t.studentIds, newStudent.id] };
-      }
-      return t;
-    });
-    saveUniversityTeams(universityId, updatedTeams);
+  // Update each targeted team in Supabase
+  for (const teamId of targetTeamIds) {
+    const targetId = !isNaN(Number(teamId)) ? Number(teamId) : teamId;
+    const { data: currentTeam, error: fetchErr } = await supabase
+      .from('teams')
+      .select('*')
+      .eq('id', targetId)
+      .single();
+
+    if (fetchErr) {
+      throw new Error(`Failed to fetch team #${targetId} to add student: ${fetchErr.message}`);
+    }
+
+    const currentMembers = Array.isArray(currentTeam.members) ? currentTeam.members : [];
+    const updatedMembers = [...currentMembers, newStudent];
+
+    await updateUniversityTeam(universityId, targetId, { members: updatedMembers });
   }
 
   return newStudent;
 }
 
-export function updateUniversityStudent(universityId, studentId, studentData) {
-  if (!studentId || !studentData) return null;
-  const list = getUniversityStudents(universityId);
+/**
+ * Update student across all teams in Supabase
+ */
+export async function updateUniversityStudent(universityId, studentId, studentData) {
+  if (!studentId || !studentData) {
+    throw new Error('Student ID and data are required.');
+  }
+
   const name = studentData.name?.trim() || 'Student Researcher';
   const parts = name.split(' ');
   const initials = parts.length > 1
     ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
     : name.slice(0, 2).toUpperCase();
 
-  const updated = list.map(s => {
-    if (s.id === studentId) {
-      return {
-        ...s,
-        name,
-        role: studentData.role?.trim() || s.role,
-        department: studentData.department?.trim() || s.department,
-        email: studentData.email?.trim() || s.email,
-        initials
-      };
-    }
-    return s;
-  });
-  saveUniversityStudents(universityId, updated);
-  return updated.find(s => s.id === studentId);
-}
-
-export function deleteUniversityStudent(universityId, studentId) {
-  if (!studentId) return false;
-  const list = getUniversityStudents(universityId);
-  const filtered = list.filter(s => s.id !== studentId);
-  saveUniversityStudents(universityId, filtered);
-
-  const teams = getUniversityTeams(universityId);
-  const updatedTeams = teams.map(t => ({
-    ...t,
-    studentIds: (t.studentIds || []).filter(id => id !== studentId)
-  }));
-  saveUniversityTeams(universityId, updatedTeams);
-  return true;
-}
-
-export function getUniversityTeams(universityId = null) {
-  try {
-    const key = getTeamsKey(universityId);
-    const raw = localStorage.getItem(key);
-    if (!raw) {
-      localStorage.setItem(key, JSON.stringify(DEFAULT_TEAMS));
-      return DEFAULT_TEAMS;
-    }
-    return JSON.parse(raw);
-  } catch (e) {
-    return DEFAULT_TEAMS;
-  }
-}
-
-export function saveUniversityTeams(universityId, teams) {
-  try {
-    localStorage.setItem(getTeamsKey(universityId), JSON.stringify(teams));
-  } catch (e) {
-    console.error('Failed to save teams:', e);
-  }
-}
-
-export function createUniversityTeam(universityId, teamData) {
-  if (!teamData || !teamData.name?.trim()) return null;
-  const teams = getUniversityTeams(universityId);
-  const newTeam = {
-    id: `team-${Date.now()}`,
-    name: teamData.name.trim(),
-    description: teamData.description?.trim() || '',
-    department: teamData.department?.trim() || 'General Engineering',
-    studentIds: Array.isArray(teamData.studentIds) ? teamData.studentIds : [],
-    assignedProblemIds: Array.isArray(teamData.assignedProblemIds) ? teamData.assignedProblemIds : [],
-    createdAt: new Date().toISOString()
+  const updatedStudentObj = {
+    id: studentId,
+    name,
+    role: studentData.role?.trim() || 'Student Researcher',
+    department: studentData.department?.trim() || 'Engineering & Technology',
+    email: studentData.email?.trim() || '',
+    initials
   };
-  const updated = [...teams, newTeam];
-  saveUniversityTeams(universityId, updated);
-  return newTeam;
-}
 
-export function updateUniversityTeam(universityId, teamId, teamData) {
-  if (!teamId || !teamData) return null;
-  const teams = getUniversityTeams(universityId);
-  const updated = teams.map(t => {
-    if (t.id === teamId) {
-      return {
-        ...t,
-        name: teamData.name?.trim() || t.name,
-        description: teamData.description !== undefined ? teamData.description.trim() : t.description,
-        department: teamData.department?.trim() || t.department,
-        studentIds: Array.isArray(teamData.studentIds) ? teamData.studentIds : t.studentIds,
-        assignedProblemIds: Array.isArray(teamData.assignedProblemIds) ? teamData.assignedProblemIds : t.assignedProblemIds
-      };
+  // Fetch all teams from Supabase
+  const allTeams = await fetchUniversityTeams(universityId);
+  const selectedTeamIds = Array.isArray(studentData.teamIds) ? studentData.teamIds.map(String) : [];
+
+  for (const team of allTeams) {
+    const isCurrentlyIn = (team.members || []).some(m => String(m.id) === String(studentId));
+    const shouldBeIn = selectedTeamIds.includes(String(team.id));
+
+    let nextMembers = null;
+
+    if (isCurrentlyIn && shouldBeIn) {
+      // Update details in place
+      nextMembers = team.members.map(m => String(m.id) === String(studentId) ? updatedStudentObj : m);
+    } else if (!isCurrentlyIn && shouldBeIn) {
+      // Add to team
+      nextMembers = [...(team.members || []), updatedStudentObj];
+    } else if (isCurrentlyIn && !shouldBeIn) {
+      // Remove from team
+      nextMembers = (team.members || []).filter(m => String(m.id) !== String(studentId));
     }
-    return t;
-  });
-  saveUniversityTeams(universityId, updated);
-  return updated.find(t => t.id === teamId);
+
+    if (nextMembers !== null) {
+      await updateUniversityTeam(universityId, team.id, { members: nextMembers });
+    }
+  }
+
+  return updatedStudentObj;
 }
 
-export function deleteUniversityTeam(universityId, teamId) {
-  if (!teamId) return false;
-  const teams = getUniversityTeams(universityId);
-  const filtered = teams.filter(t => t.id !== teamId);
-  saveUniversityTeams(universityId, filtered);
+/**
+ * Delete student from all teams in Supabase
+ */
+export async function deleteUniversityStudent(universityId, studentId) {
+  if (!studentId) {
+    throw new Error('Student ID is required to remove.');
+  }
+
+  const allTeams = await fetchUniversityTeams(universityId);
+
+  for (const team of allTeams) {
+    const hasStudent = (team.members || []).some(m => String(m.id) === String(studentId));
+    if (hasStudent) {
+      const nextMembers = (team.members || []).filter(m => String(m.id) !== String(studentId));
+      await updateUniversityTeam(universityId, team.id, { members: nextMembers });
+    }
+  }
+
   return true;
-}
-
-export function toggleTeamProblemAssignment(universityId, teamId, postId) {
-  if (!teamId || !postId) return null;
-  const teams = getUniversityTeams(universityId);
-  const updated = teams.map(t => {
-    if (t.id === teamId) {
-      const current = t.assignedProblemIds || [];
-      const hasPost = current.some(id => String(id) === String(postId));
-      const nextProblemIds = hasPost
-        ? current.filter(id => String(id) !== String(postId))
-        : [...current, postId];
-      return {
-        ...t,
-        assignedProblemIds: nextProblemIds
-      };
-    }
-    return t;
-  });
-  saveUniversityTeams(universityId, updated);
-  return updated.find(t => t.id === teamId);
 }
 
 export function getTeamsForProblem(universityId, postId) {
   if (!postId) return [];
   const teams = getUniversityTeams(universityId);
-  return teams.filter(t => (t.assignedProblemIds || []).some(id => String(id) === String(postId)));
+  return teams.filter(t => (t.associated_to || []).some(id => String(id) === String(postId)));
 }
 
 /**
@@ -1990,6 +2201,7 @@ export const postService = {
   updateUniversityStudent,
   deleteUniversityStudent,
   getUniversityTeams,
+  fetchUniversityTeams,
   createUniversityTeam,
   updateUniversityTeam,
   deleteUniversityTeam,

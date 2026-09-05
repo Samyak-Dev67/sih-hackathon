@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ProblemCard } from './ProblemCard';
 import { TeamManagement } from './TeamManagement';
 import { CATEGORIES } from '../data/mockData';
@@ -6,6 +6,7 @@ import {
   getAcceptedChallenges,
   getUniversityTeams,
   getUniversityStudents,
+  fetchUniversityTeams,
   getTeamsForProblem
 } from '../services/api';
 
@@ -26,8 +27,32 @@ export function UniversityDashboard({
 
   // Fetch accepted challenges for this university
   const acceptedList = getAcceptedChallenges(currentAccount?.id);
-  const uniTeams = getUniversityTeams(currentAccount?.id);
-  const uniStudents = getUniversityStudents(currentAccount?.id);
+  const [uniTeams, setUniTeams] = useState(() => getUniversityTeams(currentAccount?.id));
+  const [uniStudents, setUniStudents] = useState(() => getUniversityStudents(currentAccount?.id));
+
+  useEffect(() => {
+    async function loadUniData() {
+      try {
+        const fetched = await fetchUniversityTeams(currentAccount?.id);
+        setUniTeams(fetched || []);
+        const allStudents = [];
+        const seen = new Set();
+        (fetched || []).forEach(team => {
+          (team.members || []).forEach(m => {
+            if (m && (m.id || m.email || m.name)) {
+              const key = m.id || m.email || m.name;
+              if (!seen.has(key)) {
+                seen.add(key);
+                allStudents.push(m);
+              }
+            }
+          });
+        });
+        setUniStudents(allStudents);
+      } catch (e) {}
+    }
+    loadUniData();
+  }, [currentAccount?.id, activeTab]);
 
   const activeSearch = propSearchQuery !== undefined ? propSearchQuery : localSearch;
   const setActiveSearch = propOnSearchChange || setLocalSearch;

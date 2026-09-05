@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  getUniversityStudents,
-  getUniversityTeams,
+  fetchUniversityTeams,
   getAcceptedChallenges,
   addUniversityStudent,
   updateUniversityStudent,
@@ -31,10 +30,16 @@ export function TeamManagement({
 }) {
   const universityId = currentAccount?.id;
   const [subTab, setSubTab] = useState('teams'); // 'teams' | 'students'
-  const [teams, setTeams] = useState(() => getUniversityTeams(universityId));
-  const [students, setStudents] = useState(() => getUniversityStudents(universityId));
+  const [teams, setTeams] = useState([]);
+  const [students, setStudents] = useState([]);
   const [acceptedChallenges, setAcceptedChallenges] = useState(() => getAcceptedChallenges(universityId));
   const [activePickerTeamId, setActivePickerTeamId] = useState(null);
+
+  // Loading & Error States
+  const [loading, setLoading] = useState(true);
+  const [backendError, setBackendError] = useState(null);
+  const [modalError, setModalError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Search filters
   const [teamSearch, setTeamSearch] = useState('');
@@ -63,11 +68,36 @@ export function TeamManagement({
 
   const [assigningTeam, setAssigningTeam] = useState(null); // team obj for quick problem assignment modal
 
-  // Reload data from storage
-  const reloadData = () => {
-    setTeams(getUniversityTeams(universityId));
-    setStudents(getUniversityStudents(universityId));
-    setAcceptedChallenges(getAcceptedChallenges(universityId));
+  // Load data directly from Supabase backend
+  const reloadData = async () => {
+    setLoading(true);
+    setBackendError(null);
+    try {
+      const fetchedTeams = await fetchUniversityTeams(universityId);
+      setTeams(fetchedTeams || []);
+
+      // Derive distinct students list from members JSON across all teams
+      const allMembers = [];
+      const seenIds = new Set();
+      (fetchedTeams || []).forEach(team => {
+        (team.members || []).forEach(m => {
+          if (m && (m.id || m.email || m.name)) {
+            const key = m.id || m.email || m.name;
+            if (!seenIds.has(key)) {
+              seenIds.add(key);
+              allMembers.push(m);
+            }
+          }
+        });
+      });
+      setStudents(allMembers);
+    } catch (err) {
+      console.error('Error communicating with Supabase backend:', err);
+      setBackendError(err.message || 'Failed to communicate with Supabase backend.');
+    } finally {
+      setLoading(false);
+      setAcceptedChallenges(getAcceptedChallenges(universityId));
+    }
   };
 
   const availableAcceptedChallenges = acceptedChallenges.length > 0 ? acceptedChallenges : acceptedProblems;
@@ -79,7 +109,7 @@ export function TeamManagement({
   // Compute metrics
   const totalTeams = teams.length;
   const totalStudents = students.length;
-  const uniqueAssignedProblemIds = new Set(teams.flatMap(t => t.assignedProblemIds || []));
+  const uniqueAssignedProblemIds = new Set(teams.flatMap(t => t.assignedProblemIds || t.associated_to || []));
   const assignedProblemsCount = uniqueAssignedProblemIds.size;
 
   // Filtered teams
@@ -87,7 +117,7 @@ export function TeamManagement({
     if (!teamSearch.trim()) return true;
     const q = teamSearch.toLowerCase();
     return (
-      t.name.toLowerCase().includes(q) ||
+      (t.name && t.name.toLowerCase().includes(q)) ||
       (t.department && t.department.toLowerCase().includes(q)) ||
       (t.description && t.description.toLowerCase().includes(q))
     );
@@ -98,7 +128,7 @@ export function TeamManagement({
     if (!studentSearch.trim()) return true;
     const q = studentSearch.toLowerCase();
     return (
-      s.name.toLowerCase().includes(q) ||
+      (s.name && s.name.toLowerCase().includes(q)) ||
       (s.role && s.role.toLowerCase().includes(q)) ||
       (s.department && s.department.toLowerCase().includes(q)) ||
       (s.email && s.email.toLowerCase().includes(q))
@@ -108,6 +138,7 @@ export function TeamManagement({
   // Team Modal Handlers
   const handleOpenCreateTeam = () => {
     setEditingTeam(null);
+    setModalError(null);
     setTeamFormData({
       name: '',
       department: '',
@@ -120,52 +151,103 @@ export function TeamManagement({
 
   const handleOpenEditTeam = (team) => {
     setEditingTeam(team);
+    setModalError(null);
+    const existingStudentIds = Array.isArray(team.members)
+      ? team.members.map(m => m.id || m.email || m.name)
+      : (team.studentIds || []);
+
+    const existingProblemIds = Array.isArray(team.associated_to)
+      ? team.associated_to
+      : (team.assignedProblemIds || []);
+
     setTeamFormData({
       name: team.name || '',
       department: team.department || '',
       description: team.description || '',
-      studentIds: [...(team.studentIds || [])],
-      assignedProblemIds: [...(team.assignedProblemIds || [])]
+      studentIds: [...existingStudentIds],
+      assignedProblemIds: [...existingProblemIds]
     });
     setShowTeamModal(true);
   };
 
-  const handleSaveTeam = (e) => {
+  const handleSaveTeam = async (e) => {
     e.preventDefault();
-    if (!teamFormData.name.trim()) return;
-
-    if (editingTeam) {
-      updateUniversityTeam(universityId, editingTeam.id, teamFormData);
-    } else {
-      createUniversityTeam(universityId, teamFormData);
+    if (!teamFormData.name.trim()) {
+      setModalError('Please enter a valid team name.');
+      return;
     }
-    reloadData();
-    setShowTeamModal(false);
+
+    setIsSubmitting(true);
+    setModalError(null);
+
+    try {
+      // Build members list from selected student IDs
+      const selectedMembers = students.filter(s =>
+        teamFormData.studentIds.includes(s.id || s.email || s.name)
+      );
+
+      const payload = {
+        name: teamFormData.name.trim(),
+        description: teamFormData.description?.trim() || '',
+        department: teamFormData.department?.trim() || 'General Engineering',
+        associated_to: teamFormData.assignedProblemIds.map(String),
+        members: selectedMembers
+      };
+
+      if (editingTeam) {
+        await updateUniversityTeam(universityId, editingTeam.id, payload);
+      } else {
+        await createUniversityTeam(universityId, payload);
+      }
+
+      await reloadData();
+      setShowTeamModal(false);
+    } catch (err) {
+      console.error('Failed to save team to Supabase:', err);
+      setModalError(err.message || 'Failed to save team to backend.');
+      setBackendError(err.message || 'Failed to save team to backend.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDeleteTeam = (teamId, teamName) => {
-    if (window.confirm(`Are you sure you want to delete team "${teamName}"?`)) {
-      deleteUniversityTeam(universityId, teamId);
-      reloadData();
+  const handleDeleteTeam = async (teamId, teamName) => {
+    if (window.confirm(`Are you sure you want to delete team "${teamName}" from Supabase?`)) {
+      try {
+        await deleteUniversityTeam(universityId, teamId);
+        await reloadData();
+      } catch (err) {
+        console.error('Failed to delete team:', err);
+        setBackendError(err.message || 'Failed to delete team from backend.');
+      }
     }
   };
 
   // Student Modal Handlers
-  const handleOpenAddStudent = () => {
+  const handleOpenAddStudent = (preselectedTeamId = null) => {
     setEditingStudent(null);
+    setModalError(null);
+    const initialTeamIds = preselectedTeamId
+      ? [preselectedTeamId]
+      : (teams.length > 0 ? [teams[0].id] : []);
+
     setStudentFormData({
       name: '',
       role: '',
       department: '',
       email: '',
-      teamIds: []
+      teamIds: initialTeamIds
     });
     setShowStudentModal(true);
   };
 
   const handleOpenEditStudent = (student) => {
     setEditingStudent(student);
-    const memberOfTeams = teams.filter(t => (t.studentIds || []).includes(student.id)).map(t => t.id);
+    setModalError(null);
+    const memberOfTeams = teams
+      .filter(t => (t.members || []).some(m => String(m.id) === String(student.id)))
+      .map(t => t.id);
+
     setStudentFormData({
       name: student.name || '',
       role: student.role || '',
@@ -176,51 +258,128 @@ export function TeamManagement({
     setShowStudentModal(true);
   };
 
-  const handleSaveStudent = (e) => {
+  const handleSaveStudent = async (e) => {
     e.preventDefault();
-    if (!studentFormData.name.trim()) return;
-
-    if (editingStudent) {
-      updateUniversityStudent(universityId, editingStudent.id, studentFormData);
-      teams.forEach(team => {
-        const shouldBeIn = studentFormData.teamIds.includes(team.id);
-        const currentlyIn = (team.studentIds || []).includes(editingStudent.id);
-        if (shouldBeIn && !currentlyIn) {
-          updateUniversityTeam(universityId, team.id, {
-            studentIds: [...team.studentIds, editingStudent.id]
-          });
-        } else if (!shouldBeIn && currentlyIn) {
-          updateUniversityTeam(universityId, team.id, {
-            studentIds: team.studentIds.filter(id => id !== editingStudent.id)
-          });
-        }
-      });
-    } else {
-      addUniversityStudent(universityId, studentFormData);
+    if (!studentFormData.name.trim()) {
+      setModalError('Please enter the student\'s full name.');
+      return;
     }
-    reloadData();
-    setShowStudentModal(false);
+
+    if (teams.length === 0) {
+      setModalError('No research teams exist in Supabase yet. Please create a team first before enrolling student members.');
+      return;
+    }
+
+    if (!studentFormData.teamIds || studentFormData.teamIds.length === 0) {
+      setModalError('Please select at least one team to assign this student researcher to.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setModalError(null);
+
+    try {
+      if (editingStudent) {
+        await updateUniversityStudent(universityId, editingStudent.id, studentFormData);
+      } else {
+        await addUniversityStudent(universityId, studentFormData);
+      }
+      await reloadData();
+      setShowStudentModal(false);
+    } catch (err) {
+      console.error('Failed to save student member to Supabase:', err);
+      setModalError(err.message || 'Failed to save student member to backend.');
+      setBackendError(err.message || 'Failed to save student member to backend.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDeleteStudent = (studentId, studentName) => {
-    if (window.confirm(`Remove ${studentName} from the university student directory?`)) {
-      deleteUniversityStudent(universityId, studentId);
-      reloadData();
+  const handleDeleteStudent = async (studentId, studentName) => {
+    if (window.confirm(`Remove ${studentName} from all research teams in Supabase?`)) {
+      try {
+        await deleteUniversityStudent(universityId, studentId);
+        await reloadData();
+      } catch (err) {
+        console.error('Failed to delete student:', err);
+        setBackendError(err.message || 'Failed to delete student from backend.');
+      }
     }
   };
 
   // Quick Problem Assignment Modal Handlers
-  const handleToggleProblem = (teamId, postId) => {
-    toggleTeamProblemAssignment(universityId, teamId, postId);
-    reloadData();
-    if (assigningTeam && assigningTeam.id === teamId) {
-      const updatedTeams = getUniversityTeams(universityId);
-      setAssigningTeam(updatedTeams.find(t => t.id === teamId) || null);
+  const handleToggleProblem = async (teamId, postId) => {
+    try {
+      await toggleTeamProblemAssignment(universityId, teamId, postId);
+      await reloadData();
+      if (assigningTeam && String(assigningTeam.id) === String(teamId)) {
+        setAssigningTeam(prev => {
+          if (!prev) return null;
+          const current = prev.assignedProblemIds || prev.associated_to || [];
+          const postStr = String(postId);
+          const next = current.includes(postStr)
+            ? current.filter(id => id !== postStr)
+            : [...current, postStr];
+          return { ...prev, assignedProblemIds: next, associated_to: next };
+        });
+      }
+    } catch (err) {
+      console.error('Failed to update problem assignment in Supabase:', err);
+      setBackendError(err.message || 'Failed to update problem assignment in backend.');
     }
   };
 
   return (
     <div className="uni-team-management-dashboard">
+      {/* Backend Communication Error Banner */}
+      {backendError && (
+        <div className="backend-error-banner" role="alert">
+          <div className="backend-error-header">
+            <div className="backend-error-badge-row">
+              <span className="backend-error-pill">DATABASE COMMUNICATION ERROR</span>
+              <span className="backend-error-title">Supabase Backend Failure</span>
+            </div>
+            <button
+              type="button"
+              className="backend-error-dismiss"
+              onClick={() => setBackendError(null)}
+              title="Dismiss error alert"
+            >
+              ✕
+            </button>
+          </div>
+          <p className="backend-error-message">{backendError}</p>
+          {backendError.includes('42501') && (
+            <div className="backend-error-help">
+              <strong>Row Level Security (RLS) Policy Required:</strong>
+              <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.82rem' }}>
+                RLS is enabled on the <code>teams</code> table, but no policy allows access. In your Supabase dashboard, go to <strong>Authentication &gt; Policies &gt; teams</strong> and add policies granting access for <code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, and <code>DELETE</code>.
+              </p>
+            </div>
+          )}
+          {backendError.includes('42P01') && (
+            <div className="backend-error-help">
+              <strong>Missing Table:</strong>
+              <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.82rem' }}>
+                The table <code>teams</code> was not found in your Supabase database. Please create the table in Supabase Table Editor.
+              </p>
+            </div>
+          )}
+          <div className="backend-error-actions">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => {
+                setBackendError(null);
+                reloadData();
+              }}
+            >
+              Retry Connection
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="uni-workspace-header-row">
         <div>
@@ -233,7 +392,7 @@ export function TeamManagement({
           <button
             type="button"
             className="btn btn-outline"
-            onClick={handleOpenAddStudent}
+            onClick={() => handleOpenAddStudent()}
           >
             + Add Student
           </button>
@@ -251,17 +410,17 @@ export function TeamManagement({
       <div className="uni-metrics-grid">
         <div className="uni-metric-card">
           <span className="uni-metric-label">RESEARCH TEAMS</span>
-          <span className="uni-metric-value text-blue">{totalTeams}</span>
+          <span className="uni-metric-value text-blue">{loading ? '—' : totalTeams}</span>
         </div>
 
         <div className="uni-metric-card">
           <span className="uni-metric-label">STUDENT RESEARCHERS</span>
-          <span className="uni-metric-value text-orange">{totalStudents}</span>
+          <span className="uni-metric-value text-orange">{loading ? '—' : totalStudents}</span>
         </div>
 
         <div className="uni-metric-card">
           <span className="uni-metric-label">CHALLENGES COVERED</span>
-          <span className="uni-metric-value text-green">{assignedProblemsCount}</span>
+          <span className="uni-metric-value text-green">{loading ? '—' : assignedProblemsCount}</span>
         </div>
       </div>
 
@@ -272,16 +431,24 @@ export function TeamManagement({
           className={`uni-team-subnav-btn ${subTab === 'teams' ? 'active' : ''}`}
           onClick={() => setSubTab('teams')}
         >
-          Research Teams ({teams.length})
+          Research Teams ({loading ? '...' : teams.length})
         </button>
         <button
           type="button"
           className={`uni-team-subnav-btn ${subTab === 'students' ? 'active' : ''}`}
           onClick={() => setSubTab('students')}
         >
-          Student Directory ({students.length})
+          Student Directory ({loading ? '...' : students.length})
         </button>
       </div>
+
+      {/* Loading indicator */}
+      {loading && (
+        <div className="team-loading-state">
+          <div className="team-loading-spinner" />
+          <span>Synchronizing teams with Supabase database...</span>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* VIEW 1: RESEARCH TEAMS                                                   */}
@@ -327,8 +494,10 @@ export function TeamManagement({
           ) : (
             <div className="teams-grid-container">
               {filteredTeams.map((team) => {
-                const teamStudents = students.filter(s => (team.studentIds || []).includes(s.id));
-                const teamProblemIds = team.assignedProblemIds || [];
+                const teamMembers = Array.isArray(team.members) ? team.members : [];
+                const teamProblemIds = Array.isArray(team.associated_to)
+                  ? team.associated_to
+                  : (team.assignedProblemIds || []);
                 const assignedChallenges = availableAcceptedChallenges.filter(p =>
                   teamProblemIds.some(id => String(id) === String(p.postId))
                 );
@@ -516,34 +685,44 @@ export function TeamManagement({
                     <div className="team-members-block">
                       <div className="team-section-header-row">
                         <span className="team-section-subheading">
-                          Team Members ({teamStudents.length})
+                          Team Members ({teamMembers.length})
                         </span>
-                        <button
-                          type="button"
-                          className="btn-link-action"
-                          onClick={() => handleOpenEditTeam(team)}
-                        >
-                          Edit Roster
-                        </button>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="btn-link-action"
+                            onClick={() => handleOpenAddStudent(team.id)}
+                          >
+                            + Add Student
+                          </button>
+                          <span style={{ color: 'var(--text-muted)' }}>|</span>
+                          <button
+                            type="button"
+                            className="btn-link-action"
+                            onClick={() => handleOpenEditTeam(team)}
+                          >
+                            Edit Roster
+                          </button>
+                        </div>
                       </div>
 
-                      {teamStudents.length === 0 ? (
+                      {teamMembers.length === 0 ? (
                         <div className="team-no-members-notice">
                           <span>No students assigned to this team yet.</span>
                           <button
                             type="button"
                             className="btn btn-outline btn-sm"
-                            onClick={() => handleOpenEditTeam(team)}
+                            onClick={() => handleOpenAddStudent(team.id)}
                             style={{ marginTop: '0.4rem' }}
                           >
-                            + Add Members
+                            + Add Student Member
                           </button>
                         </div>
                       ) : (
                         <div className="team-students-list">
-                          {teamStudents.map((stu) => (
-                            <div key={stu.id} className="team-student-chip">
-                              <div className="student-avatar-badge">{stu.initials}</div>
+                          {teamMembers.map((stu) => (
+                            <div key={stu.id || stu.name} className="team-student-chip">
+                              <div className="student-avatar-badge">{stu.initials || 'ST'}</div>
                               <div className="student-chip-details">
                                 <span className="student-chip-name">{stu.name}</span>
                                 <span className="student-chip-role">{stu.role}</span>
@@ -588,7 +767,7 @@ export function TeamManagement({
             <button
               type="button"
               className="btn btn-blue"
-              onClick={handleOpenAddStudent}
+              onClick={() => handleOpenAddStudent()}
             >
               + Add Student Researcher
             </button>
@@ -607,7 +786,7 @@ export function TeamManagement({
                   type="button"
                   className="btn btn-blue"
                   style={{ marginTop: '0.75rem' }}
-                  onClick={handleOpenAddStudent}
+                  onClick={() => handleOpenAddStudent()}
                 >
                   + Add Student Researcher
                 </button>
@@ -627,12 +806,14 @@ export function TeamManagement({
                   </thead>
                   <tbody>
                     {filteredStudents.map((student) => {
-                      const studentTeams = teams.filter(t => (t.studentIds || []).includes(student.id));
+                      const studentTeams = teams.filter(t =>
+                        (t.members || []).some(m => String(m.id || m.name) === String(student.id || student.name))
+                      );
                       return (
-                        <tr key={student.id}>
+                        <tr key={student.id || student.email || student.name}>
                           <td>
                             <div className="student-table-name-cell">
-                              <div className="student-avatar-badge">{student.initials}</div>
+                              <div className="student-avatar-badge">{student.initials || 'ST'}</div>
                               <span className="student-table-name">{student.name}</span>
                             </div>
                           </td>
@@ -691,7 +872,7 @@ export function TeamManagement({
       {/* MODAL 1: CREATE / EDIT TEAM                                              */}
       {/* ========================================================================= */}
       {showTeamModal && (
-        <div className="modal-backdrop-overlay" onClick={() => setShowTeamModal(false)}>
+        <div className="modal-backdrop-overlay" onClick={() => !isSubmitting && setShowTeamModal(false)}>
           <div className="team-modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-row">
               <div>
@@ -699,18 +880,25 @@ export function TeamManagement({
                   {editingTeam ? 'Edit Research Team' : 'Create New Research Team'}
                 </h2>
                 <p className="modal-subheading-text">
-                  Configure multidisciplinary team details, member roster, and problem assignments.
+                  Configure team details, members, and accepted problem assignments in Supabase.
                 </p>
               </div>
               <button
                 type="button"
                 className="modal-close-icon"
-                onClick={() => setShowTeamModal(false)}
+                onClick={() => !isSubmitting && setShowTeamModal(false)}
                 title="Close"
               >
                 ✕
               </button>
             </div>
+
+            {/* Modal Error Alert */}
+            {modalError && (
+              <div className="modal-error-banner" role="alert">
+                <span className="modal-error-title">Backend Error:</span> {modalError}
+              </div>
+            )}
 
             <form onSubmit={handleSaveTeam} className="team-modal-form">
               <div className="form-group-item">
@@ -722,6 +910,7 @@ export function TeamManagement({
                   value={teamFormData.name}
                   onChange={(e) => setTeamFormData({ ...teamFormData, name: e.target.value })}
                   required
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -733,6 +922,7 @@ export function TeamManagement({
                   placeholder="e.g., Department of Environmental & Sensor Engineering"
                   value={teamFormData.department}
                   onChange={(e) => setTeamFormData({ ...teamFormData, department: e.target.value })}
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -744,6 +934,7 @@ export function TeamManagement({
                   placeholder="Brief summary of what this team is specialized in..."
                   value={teamFormData.description}
                   onChange={(e) => setTeamFormData({ ...teamFormData, description: e.target.value })}
+                  disabled={isSubmitting}
                 />
               </div>
 
@@ -752,30 +943,32 @@ export function TeamManagement({
                 <label className="form-item-label">
                   Assign Student Researchers ({teamFormData.studentIds.length} selected)
                 </label>
-                <p className="form-help-hint">Select students from your university roster to join this team.</p>
+                <p className="form-help-hint">Select enrolled students to include in this team's roster.</p>
                 {students.length === 0 ? (
                   <div className="form-empty-hint">
-                    No students found. Add students to the student directory first.
+                    No student researchers enrolled yet. You can create the team now and add students later.
                   </div>
                 ) : (
                   <div className="team-multiselect-box">
                     {students.map((stu) => {
-                      const isChecked = teamFormData.studentIds.includes(stu.id);
+                      const stuKey = stu.id || stu.email || stu.name;
+                      const isChecked = teamFormData.studentIds.includes(stuKey);
                       return (
-                        <label key={stu.id} className={`multiselect-row-item ${isChecked ? 'selected' : ''}`}>
+                        <label key={stuKey} className={`multiselect-row-item ${isChecked ? 'selected' : ''}`}>
                           <input
                             type="checkbox"
                             checked={isChecked}
+                            disabled={isSubmitting}
                             onChange={(e) => {
                               if (e.target.checked) {
                                 setTeamFormData({
                                   ...teamFormData,
-                                  studentIds: [...teamFormData.studentIds, stu.id]
+                                  studentIds: [...teamFormData.studentIds, stuKey]
                                 });
                               } else {
                                 setTeamFormData({
                                   ...teamFormData,
-                                  studentIds: teamFormData.studentIds.filter(id => id !== stu.id)
+                                  studentIds: teamFormData.studentIds.filter(id => id !== stuKey)
                                 });
                               }
                             }}
@@ -813,6 +1006,7 @@ export function TeamManagement({
                           <input
                             type="checkbox"
                             checked={isChecked}
+                            disabled={isSubmitting}
                             onChange={(e) => {
                               if (e.target.checked) {
                                 setTeamFormData({
@@ -845,14 +1039,18 @@ export function TeamManagement({
                   type="button"
                   className="btn btn-outline"
                   onClick={() => setShowTeamModal(false)}
+                  disabled={isSubmitting}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   className="btn btn-blue"
+                  disabled={isSubmitting}
                 >
-                  {editingTeam ? 'Update Team' : 'Create Team'}
+                  {isSubmitting
+                    ? 'Saving to Supabase...'
+                    : (editingTeam ? 'Update Team' : 'Create Team in Database')}
                 </button>
               </div>
             </form>
@@ -861,10 +1059,10 @@ export function TeamManagement({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: ADD / EDIT STUDENT                                              */}
+      {/* MODAL 2: ADD / EDIT STUDENT RESEARCHER                                   */}
       {/* ========================================================================= */}
       {showStudentModal && (
-        <div className="modal-backdrop-overlay" onClick={() => setShowStudentModal(false)}>
+        <div className="modal-backdrop-overlay" onClick={() => !isSubmitting && setShowStudentModal(false)}>
           <div className="team-modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-row">
               <div>
@@ -872,88 +1070,115 @@ export function TeamManagement({
                   {editingStudent ? 'Edit Student Researcher' : 'Add Student Researcher'}
                 </h2>
                 <p className="modal-subheading-text">
-                  Enroll student talent with designated research engineering roles.
+                  Enroll student talent with designated research engineering roles into your teams.
                 </p>
               </div>
               <button
                 type="button"
                 className="modal-close-icon"
-                onClick={() => setShowStudentModal(false)}
+                onClick={() => !isSubmitting && setShowStudentModal(false)}
                 title="Close"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleSaveStudent} className="team-modal-form">
-              <div className="form-group-item">
-                <label className="form-item-label">Full Name *</label>
-                <input
-                  type="text"
-                  className="form-input-field"
-                  placeholder="e.g., Aarav Deshmukh"
-                  value={studentFormData.name}
-                  onChange={(e) => setStudentFormData({ ...studentFormData, name: e.target.value })}
-                  required
-                />
+            {/* Modal Error Alert */}
+            {modalError && (
+              <div className="modal-error-banner" role="alert">
+                <span className="modal-error-title">Backend Error:</span> {modalError}
               </div>
+            )}
 
-              <div className="form-group-item">
-                <label className="form-item-label">Designated Role *</label>
-                <input
-                  type="text"
-                  className="form-input-field"
-                  placeholder="e.g., Embedded Systems Lead"
-                  value={studentFormData.role}
-                  onChange={(e) => setStudentFormData({ ...studentFormData, role: e.target.value })}
-                  required
-                />
-                <div className="suggested-roles-chips">
-                  <span className="suggested-roles-label">Quick Suggestions:</span>
-                  {SUGGESTED_ROLES.map((role) => (
-                    <button
-                      key={role}
-                      type="button"
-                      className="suggested-role-chip"
-                      onClick={() => setStudentFormData({ ...studentFormData, role })}
-                    >
-                      {role}
-                    </button>
-                  ))}
+            {teams.length === 0 ? (
+              <div className="form-empty-hint" style={{ padding: '1.25rem', textAlign: 'center' }}>
+                <h4 style={{ margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>Create a Team First</h4>
+                <p style={{ margin: '0 0 1rem 0', fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                  Student researchers must be enrolled into a research team in Supabase. Please create your first research team before adding students.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-blue"
+                  onClick={() => {
+                    setShowStudentModal(false);
+                    handleOpenCreateTeam();
+                  }}
+                >
+                  + Create Research Team First
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveStudent} className="team-modal-form">
+                <div className="form-group-item">
+                  <label className="form-item-label">Full Name *</label>
+                  <input
+                    type="text"
+                    className="form-input-field"
+                    placeholder="e.g., Aarav Deshmukh"
+                    value={studentFormData.name}
+                    onChange={(e) => setStudentFormData({ ...studentFormData, name: e.target.value })}
+                    required
+                    disabled={isSubmitting}
+                  />
                 </div>
-              </div>
 
-              <div className="form-group-item">
-                <label className="form-item-label">Department / Branch</label>
-                <input
-                  type="text"
-                  className="form-input-field"
-                  placeholder="e.g., Electrical Engineering"
-                  value={studentFormData.department}
-                  onChange={(e) => setStudentFormData({ ...studentFormData, department: e.target.value })}
-                />
-              </div>
-
-              <div className="form-group-item">
-                <label className="form-item-label">Institutional Email / Roll No.</label>
-                <input
-                  type="email"
-                  className="form-input-field"
-                  placeholder="e.g., student.name@univ.edu.in"
-                  value={studentFormData.email}
-                  onChange={(e) => setStudentFormData({ ...studentFormData, email: e.target.value })}
-                />
-              </div>
-
-              {/* Team Assignment */}
-              <div className="form-group-item">
-                <label className="form-item-label">Assign to Teams</label>
-                <p className="form-help-hint">Students can be enrolled in multiple research teams.</p>
-                {teams.length === 0 ? (
-                  <div className="form-empty-hint">
-                    No teams created yet. You can create a team and assign this student later.
+                <div className="form-group-item">
+                  <label className="form-item-label">Designated Role *</label>
+                  <input
+                    type="text"
+                    className="form-input-field"
+                    placeholder="e.g., Embedded Systems Lead"
+                    value={studentFormData.role}
+                    onChange={(e) => setStudentFormData({ ...studentFormData, role: e.target.value })}
+                    required
+                    disabled={isSubmitting}
+                  />
+                  <div className="suggested-roles-chips">
+                    <span className="suggested-roles-label">Quick Suggestions:</span>
+                    {SUGGESTED_ROLES.map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        className="suggested-role-chip"
+                        onClick={() => setStudentFormData({ ...studentFormData, role })}
+                        disabled={isSubmitting}
+                      >
+                        {role}
+                      </button>
+                    ))}
                   </div>
-                ) : (
+                </div>
+
+                <div className="form-group-item">
+                  <label className="form-item-label">Department / Branch</label>
+                  <input
+                    type="text"
+                    className="form-input-field"
+                    placeholder="e.g., Electrical Engineering"
+                    value={studentFormData.department}
+                    onChange={(e) => setStudentFormData({ ...studentFormData, department: e.target.value })}
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                <div className="form-group-item">
+                  <label className="form-item-label">Institutional Email / Roll No.</label>
+                  <input
+                    type="email"
+                    className="form-input-field"
+                    placeholder="e.g., student.name@univ.edu.in"
+                    value={studentFormData.email}
+                    onChange={(e) => setStudentFormData({ ...studentFormData, email: e.target.value })}
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                {/* Team Assignment Checkboxes */}
+                <div className="form-group-item">
+                  <label className="form-item-label">Assign to Research Teams *</label>
+                  <p className="form-help-hint">
+                    Select which research team(s) this student researcher will join.
+                  </p>
                   <div className="team-multiselect-box">
                     {teams.map((t) => {
                       const isChecked = studentFormData.teamIds.includes(t.id);
@@ -962,6 +1187,7 @@ export function TeamManagement({
                           <input
                             type="checkbox"
                             checked={isChecked}
+                            disabled={isSubmitting}
                             onChange={(e) => {
                               if (e.target.checked) {
                                 setStudentFormData({
@@ -978,31 +1204,37 @@ export function TeamManagement({
                           />
                           <div className="multiselect-label-content">
                             <span className="multiselect-primary-name">{t.name}</span>
-                            <span className="text-muted" style={{ fontSize: '0.78rem' }}>{t.department}</span>
+                            <span className="text-muted" style={{ fontSize: '0.78rem' }}>
+                              {t.department || 'Research Team'}
+                            </span>
                           </div>
                         </label>
                       );
                     })}
                   </div>
-                )}
-              </div>
+                </div>
 
-              <div className="modal-form-actions-row">
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={() => setShowStudentModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-blue"
-                >
-                  {editingStudent ? 'Update Student' : 'Save Student'}
-                </button>
-              </div>
-            </form>
+                <div className="modal-form-actions-row">
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setShowStudentModal(false)}
+                    disabled={isSubmitting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-blue"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting
+                      ? 'Saving to Supabase...'
+                      : (editingStudent ? 'Update Student' : 'Save Student to Database')}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
@@ -1054,7 +1286,7 @@ export function TeamManagement({
               ) : (
                 <div className="team-problems-toggle-list">
                   {availableAcceptedChallenges.map((prob) => {
-                    const isAssigned = (assigningTeam.assignedProblemIds || []).some(
+                    const isAssigned = (assigningTeam.associated_to || assigningTeam.assignedProblemIds || []).some(
                       id => String(id) === String(prob.postId)
                     );
                     return (

@@ -5872,5 +5872,170 @@ body {
   color: var(--text-secondary);
 }
 
+/* ── Backend Communication Error Banner (Supabase) ── */
+.backend-error-banner {
+  margin-bottom: 1.5rem;
+  padding: 1.15rem 1.35rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-left: 4px solid #ef4444;
+  border-radius: 12px;
+  animation: fadeIn 0.25s ease;
+}
 
+[data-theme="light"] .backend-error-banner {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  border-left-color: #dc2626;
+}
 
+.backend-error-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.backend-error-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.backend-error-pill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.55rem;
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+  border-radius: 9999px;
+}
+
+[data-theme="light"] .backend-error-pill {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.backend-error-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ef4444;
+}
+
+[data-theme="light"] .backend-error-title {
+  color: #b91c1c;
+}
+
+.backend-error-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.backend-error-dismiss:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.backend-error-message {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  margin: 0 0 0.6rem 0;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.backend-error-help {
+  margin: 0.6rem 0;
+  padding: 0.65rem 0.85rem;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px dashed rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .backend-error-help {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: #fca5a5;
+  color: #475569;
+}
+
+.backend-error-help code {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+[data-theme="light"] .backend-error-help code {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.backend-error-actions {
+  margin-top: 0.65rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* ── Modal Error Banner ── */
+.modal-error-banner {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #f87171;
+  line-height: 1.4;
+  word-break: break-word;
+  animation: fadeIn 0.2s ease;
+}
+
+[data-theme="light"] .modal-error-banner {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+.modal-error-title {
+  font-weight: 700;
+  color: #ef4444;
+}
+
+/* ── Loading Spinner State ── */
+.team-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2.5rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.team-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
