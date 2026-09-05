@@ -144,7 +144,7 @@ export function ProblemCard({
 
           <div className="status-container" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
             {isResolved ? (
-              <span className="tag-pill status-resolved-badge">✅ RESOLVED</span>
+              <span className="tag-pill status-resolved-badge">RESOLVED</span>
             ) : (
               <span className="tag-pill status-open-badge">OPEN</span>
             )}
@@ -160,7 +160,7 @@ export function ProblemCard({
                     onClick={handleCardToggleResolve}
                     title={isResolved ? "Click to reopen this problem" : "Click to mark as resolved"}
                   >
-                    {isResolved ? '↩️ Reopen' : '✅ Resolve'}
+                    {isResolved ? 'Reopen' : 'Resolve'}
                   </button>
                 )}
                 {onDeleteProblem && (
@@ -171,7 +171,10 @@ export function ProblemCard({
                     title="Delete your problem"
                     aria-label="Delete problem"
                   >
-                    🗑️
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
                   </button>
                 )}
               </div>
@@ -197,7 +200,7 @@ export function ProblemCard({
           <div className="card-solutions-preview-box">
             <div className="card-solutions-preview-header">
               <span className="card-solutions-pill">
-                💡 {postSolutions.length} {postSolutions.length === 1 ? 'Solution Submitted' : 'Solutions Submitted'}
+                {postSolutions.length} {postSolutions.length === 1 ? 'Solution Submitted' : 'Solutions Submitted'}
               </span>
               <span className="card-solutions-view-hint">Click card to review details →</span>
             </div>
@@ -232,13 +235,11 @@ export function ProblemCard({
           {/* Solutions & Comments indicators */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div className="solutions-indicator" title="Submitted solutions">
-              <span>💡</span>
               <span className="solutions-count-text">
                 {postSolutions.length} {postSolutions.length === 1 ? 'Solution' : 'Solutions'}
               </span>
             </div>
             <div className="solutions-indicator" title="Citizen comments">
-              <span>💬</span>
               <span className="solutions-count-text">
                 {validComments.length} {validComments.length === 1 ? 'Comment' : 'Comments'}
               </span>

@@ -18,7 +18,10 @@ export function AuthGuard({ expectedRole, currentAccount, children }) {
       <div className="auth-guard-container">
         <div className="auth-guard-card">
           <div className="auth-guard-icon-box lock-icon">
-            🔒
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
           </div>
           <span className="auth-guard-pill">AUTHENTICATION REQUIRED</span>
           <h2 className="auth-guard-title">Sign In to Access {portalLabel} Portal</h2>
@@ -53,7 +56,11 @@ export function AuthGuard({ expectedRole, currentAccount, children }) {
       <div className="auth-guard-container">
         <div className="auth-guard-card">
           <div className="auth-guard-icon-box warn-icon">
-            ⚠️
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="8" x2="12" y2="12"></line>
+              <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
           </div>
           <span className="auth-guard-pill warn">RESTRICTED ACCESS</span>
           <h2 className="auth-guard-title">{portalLabel} Portal Is Restricted</h2>

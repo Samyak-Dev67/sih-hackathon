@@ -1,21 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// Pool of interesting real-world civic problems to spawn in the web
+// Pool of authentic India-relevant civic problems to spawn in the web
 const PROBLEM_POOL = [
-  { text: 'Grid Surges on Solar Lines', cat: 'Energy', icon: '⚡', color: '#f472b6' },
-  { text: 'Bus Delays on Route 4', cat: 'Transit', icon: '🚌', color: '#c084fc' },
-  { text: 'Nitrate Leaks in Wells', cat: 'Water', icon: '💧', color: '#38bdf8' },
-  { text: 'Dark Streetlights on 5th Ave', cat: 'Safety', icon: '💡', color: '#fbbf24' },
-  { text: 'Stormwater Basin Overflow', cat: 'Climate', icon: '🌧️', color: '#34d399' },
-  { text: 'Plaza Heat Island', cat: 'Urban', icon: '🌡️', color: '#f87171' },
-  { text: 'Suburban EV Charger Gap', cat: 'Mobility', icon: '🔌', color: '#a78bfa' },
-  { text: 'School Zone Gridlock', cat: 'Safety', icon: '🚸', color: '#fb923c' },
-  { text: 'Microplastics in Canal Runoff', cat: 'Ecology', icon: '🧪', color: '#2dd4bf' },
-  { text: 'Hospital Rush-Hour Bottleneck', cat: 'Health', icon: '🏥', color: '#e879f9' },
-  { text: 'E-Waste Hub Overflow', cat: 'Waste', icon: '♻️', color: '#4ade80' },
-  { text: 'Highway Noise Pollution', cat: 'Civic', icon: '🔊', color: '#f43f5e' },
-  { text: 'Runoff Soil Erosion', cat: 'Farming', icon: '🌱', color: '#a3e635' },
-  { text: 'Water Main Pressure Drops', cat: 'Infra', icon: '🚰', color: '#60a5fa' }
+  { text: 'Monsoon Waterlogging on Ring Road', cat: 'Drainage', color: '#38bdf8' },
+  { text: 'Peak-Hour Metro Feeder Bus Shortage', cat: 'Transit', color: '#c084fc' },
+  { text: 'Frequent Transformer Trips in Sector 14', cat: 'Power', color: '#f472b6' },
+  { text: 'Open Drain Overflow Near Sabzi Mandi', cat: 'Sanitation', color: '#34d399' },
+  { text: 'Broken Streetlights on Old Station Road', cat: 'Safety', color: '#fbbf24' },
+  { text: 'Tanker Water Contamination & High TDS', cat: 'Water', color: '#60a5fa' },
+  { text: 'Pothole Clusters on Highway Flyover Ramp', cat: 'Roads', color: '#f87171' },
+  { text: 'Air Quality Spikes from Waste Burning', cat: 'Pollution', color: '#fb923c' },
+  { text: 'Lack of EV Auto Rickshaw Fast Chargers', cat: 'Mobility', color: '#a78bfa' },
+  { text: 'Groundwater Table Depletion in Tubewells', cat: 'Water', color: '#2dd4bf' },
+  { text: 'Canal Silt Choking Farm Irrigation', cat: 'Agriculture', color: '#a3e635' },
+  { text: 'Primary Health Center Oxygen Sensor Fault', cat: 'Health', color: '#e879f9' },
+  { text: 'Plastic Waste Choking Stormwater Nullah', cat: 'Environment', color: '#4ade80' },
+  { text: 'Traffic Jam at Railway Level Crossing', cat: 'Transit', color: '#f43f5e' },
+  { text: 'Low Voltage at Rural Solar Feeder Substation', cat: 'Energy', color: '#ec4899' },
+  { text: 'School Zone Pedestrian Zebra Crossing Faded', cat: 'Safety', color: '#f59e0b' }
 ];
 
 export function InteractivePlayground() {
@@ -254,7 +256,6 @@ export function InteractivePlayground() {
           {/* Top Bar - Cleaned: Red/Yellow/Green Mac dots removed */}
           <div className="web-window-bar">
             <div className="web-instruction-badge">
-              <span className="web-tap-icon">✨</span>
               <span>Click anywhere inside to spawn & link problems</span>
             </div>
             <div className="web-stats-badge">
@@ -332,13 +333,12 @@ export function InteractivePlayground() {
                 >
                   <div className="node-bubble-inner">
                     <div className="bubble-cat-tag">
-                      <span className="bubble-icon">{node.icon}</span>
                       <span className="bubble-cat-name">{node.cat}</span>
                     </div>
                     <div className="bubble-problem-text">{node.text}</div>
                     <div className="bubble-footer-row">
                       <span className="bubble-upvote-chip" title="Click to boost">
-                        ⚡ {node.upvotes}
+                        +{node.upvotes}
                       </span>
                       <span className="bubble-linked-dot" />
                     </div>
@@ -349,7 +349,7 @@ export function InteractivePlayground() {
 
             {/* Quick Helper Floating Overlay Tag */}
             <div className="web-helper-chip">
-              <span>👉 Click anywhere to expand the floating web</span>
+              <span>Click anywhere to expand the floating web</span>
             </div>
 
             {/* Selected Node Inspector Peek (Bottom Edge) */}
@@ -357,10 +357,9 @@ export function InteractivePlayground() {
               <div className="web-inspector-card" onClick={(e) => e.stopPropagation()}>
                 <div className="inspector-top-row">
                   <div className="inspector-tag-group">
-                    <span className="inspector-icon">{activeNode.icon}</span>
                     <span className="inspector-cat">{activeNode.cat} Sector</span>
                   </div>
-                  <span className="inspector-upvote-badge">⚡ {activeNode.upvotes} Citizens Impacted</span>
+                  <span className="inspector-upvote-badge">{activeNode.upvotes} Citizens Impacted</span>
                 </div>
                 <div className="inspector-title">{activeNode.text}</div>
               </div>

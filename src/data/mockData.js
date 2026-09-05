@@ -20,27 +20,27 @@ export const CATEGORIES = [
   "Tech"
 ];
 
-// Exactly 2 sample questions using Lorem Ipsum text
+// Realistic Indian civic problems & sample posts
 export const INITIAL_POSTS = [
   {
     id: 101,
     created_at: "2026-09-04T07:30:00Z",
-    title: "Lorem ipsum dolor sit amet, consectetur adipiscing elit",
-    desc: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+    title: "Monsoon Waterlogging and Drain Backflow near Old Station Road",
+    desc: "Every monsoon, the arterial stretch between Old Station Road and the Vegetable Market gets submerged in 2 to 3 feet of stagnant water. Silt accumulation in the municipal storm drain causes blackwater backflow into residential basements, halting morning commuter buses and auto-rickshaws.",
     img: "",
     category: "Infrastructure",
-    score: 12,
-    comments: [], // Backend schema field; NOT exposed as comments in user UI
-    liked_by: ["citizen-account-2"], // Enforces 1 like per account
+    score: 18,
+    comments: [],
+    liked_by: ["citizen-account-2"],
     solutions: [
       {
         id: "sol-1",
         post_id: 101,
-        title: "Duis aute irure dolor in reprehenderit in voluptate",
-        desc: "Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
-        proposed_approach: "Curabitur pretium tincidunt lacus. Nulla gravida orci a odio. Nullam varius, turpis et commodo pharetra, est eros bibendum elit.",
+        title: "Micro-Catchment Desilting & Permeable Infiltration Paver Design",
+        desc: "IIT / Civil Engineering Dept proposed a modular rainwater percolation pit system combined with geo-textile desilting grates.",
+        proposed_approach: "Implement 4 staggered groundwater recharge borewells along the natural slope gradient and replace concrete sidewalks with interlocking porous pavers to absorb 65% of peak stormwater runoff.",
         author_role: "university",
-        author_name: "University Account 1",
+        author_name: "Indian Institute of Technology (Urban Dept)",
         created_at: "2026-09-04T08:15:00Z"
       }
     ]
@@ -48,60 +48,47 @@ export const INITIAL_POSTS = [
   {
     id: 102,
     created_at: "2026-09-04T06:45:00Z",
-    title: "Vestibulum ante ipsum primis in faucibus orci luctus",
-    desc: "Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Mauris viverra veniam commodo, convallis magna sed, tincidunt libero. Suspendisse potenti.",
+    title: "Frequent 11kV Distribution Transformer Trips in Sector 14",
+    desc: "Overheating and unbalanced phase loading during peak evening summer hours (6 PM - 10 PM) causes frequent tripping of the local distribution transformer. Over 300 families face voltage drops down to 160V, causing cooling appliances and water booster pumps to malfunction.",
     img: "",
     category: "Tech",
-    score: 8,
+    score: 14,
     comments: [],
     liked_by: [],
     solutions: [
       {
         id: "sol-2",
         post_id: 102,
-        title: "Vivamus suscipit tortor eget felis porttitor volutpat",
-        desc: "Donec sollicitudin molestie malesuada. Vestibulum ac diam sit amet quam vehicula elementum sed sit amet dui.",
-        proposed_approach: "Pellentesque in ipsum id orci porta dapibus. Curabitur aliquet quam id dui posuere blandit.",
+        title: "IoT Load-Balancing & Automatic Dynamic Phase Switchers",
+        desc: "L&T Smart Power & Energy Systems proposed retrofitting pole-mounted smart phase selectors with real-time SCADA telemetry.",
+        proposed_approach: "Install three-phase microprocessor load monitors that auto-redistribute single-phase residential loads across less saturated feeder lines when phase draw exceeds 85% rated capacity.",
         author_role: "industry",
-        author_name: "Industry Account 1",
+        author_name: "L&T Electrical & Power Solutions",
         created_at: "2026-09-04T07:50:00Z"
+      }
+    ]
+  },
+  {
+    id: 103,
+    created_at: "2026-09-03T11:20:00Z",
+    title: "Heavy Metal & TDS Spikes in Domestic Tubewell Water Supply",
+    desc: "Residents in the peri-urban industrial fringe report tap water turning yellowish with strong chemical odor. Water testing in three society tubewells indicates TDS exceeding 1800 ppm and elevated nitrates from untreated agricultural and industrial seepage.",
+    img: "",
+    category: "Health",
+    score: 22,
+    comments: [],
+    liked_by: [],
+    solutions: [
+      {
+        id: "sol-3",
+        post_id: 103,
+        title: "Low-Cost Activated Bio-Carbon Multi-Stage Filtration Unit",
+        desc: "National Chemical Laboratory (CSIR) formulation for low-energy community purification.",
+        proposed_approach: "Deploy decentralized gravity-fed biochar filtration columns followed by UV disinfection tanks at community boreheads, achieving 92% removal of dissolved pollutants without wasting reject brine like domestic RO systems.",
+        author_role: "university",
+        author_name: "CSIR National Chemical Laboratory",
+        created_at: "2026-09-03T14:30:00Z"
       }
     ]
   }
 ];
-
-// Generic accounts only - no real names
-export const DEMO_ACCOUNTS = {
-  citizen: {
-    id: "citizen-account-1",
-    name: "Alex Rivera",
-    email: "alex.rivera@demo.org",
-    role: "citizen",
-    roleBadge: "CITZ",
-    initials: "AR"
-  },
-  citizen2: {
-    id: "citizen-account-2",
-    name: "Jordan Lee",
-    email: "jordan.lee@demo.org",
-    role: "citizen",
-    roleBadge: "CITZ",
-    initials: "JL"
-  },
-  university: {
-    id: "university-account-1",
-    name: "University Account 1",
-    email: "university1@demo.org",
-    role: "university",
-    roleBadge: "UNI",
-    initials: "U1"
-  },
-  industry: {
-    id: "industry-account-1",
-    name: "Industry Account 1",
-    email: "industry1@demo.org",
-    role: "industry",
-    roleBadge: "INDS",
-    initials: "I1"
-  }
-};

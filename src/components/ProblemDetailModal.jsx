@@ -262,7 +262,7 @@ export function ProblemDetailModal({
       setSolTitle('');
       setSolApproach('');
       setShowSolutionForm(false);
-      setFeedbackMsg('✅ Solution submitted successfully! It is now visible under this problem.');
+      setFeedbackMsg('Solution submitted successfully! It is now visible under this problem.');
       setTimeout(() => setFeedbackMsg(''), 5000);
     } catch (err) {
       setFeedbackMsg(err.message || 'Error submitting solution.');
@@ -285,7 +285,7 @@ export function ProblemDetailModal({
         await postService.deleteSolution(id, solId, currentAccount);
       }
       setActiveSolutions(prev => prev.filter(s => s.id !== solId));
-      setFeedbackMsg('✅ Your solution has been deleted.');
+      setFeedbackMsg('Your solution has been deleted.');
       setTimeout(() => setFeedbackMsg(''), 4000);
     } catch (err) {
       console.error('Failed to delete solution:', err);
@@ -326,11 +326,11 @@ export function ProblemDetailModal({
 
       setActiveComments(prev => [...prev, commentPayload]);
       setCommentText('');
-      setCommentFeedback('✅ Comment posted successfully!');
+      setCommentFeedback('Comment posted successfully!');
       setTimeout(() => setCommentFeedback(''), 4000);
     } catch (err) {
       console.error('Failed to post comment:', err);
-      setCommentFeedback(`❌ ${err.message || 'Failed to post comment.'}`);
+      setCommentFeedback(err.message || 'Failed to post comment.');
     } finally {
       setSubmittingComment(false);
     }
@@ -349,7 +349,7 @@ export function ProblemDetailModal({
         await postService.deleteComment(id, commentId, currentAccount);
       }
       setActiveComments(prev => prev.filter(c => c.id !== commentId));
-      setCommentFeedback('✅ Comment deleted.');
+      setCommentFeedback('Comment deleted.');
       setTimeout(() => setCommentFeedback(''), 3000);
     } catch (err) {
       console.error('Failed to delete comment:', err);
@@ -366,7 +366,7 @@ export function ProblemDetailModal({
         <div className="modal-header-bar">
           <div className="modal-header-meta">
             {currentStatus === 'Resolved' ? (
-              <span className="tag-pill status-resolved-badge">✅ RESOLVED</span>
+              <span className="tag-pill status-resolved-badge">RESOLVED</span>
             ) : (
               <span className="tag-pill status-open-badge">OPEN</span>
             )}
@@ -410,7 +410,7 @@ export function ProblemDetailModal({
                       disabled={resolving}
                       title={currentStatus === 'Resolved' ? "Reopen problem" : "Mark problem as resolved"}
                     >
-                      {resolving ? 'Updating...' : currentStatus === 'Resolved' ? '↩️ Reopen Problem' : '✅ Mark Resolved'}
+                      {resolving ? 'Updating...' : currentStatus === 'Resolved' ? 'Reopen Problem' : 'Mark Resolved'}
                     </button>
                   )}
                   <button 
@@ -419,7 +419,7 @@ export function ProblemDetailModal({
                     onClick={() => setIsEditing(true)}
                     title="Edit problem details"
                   >
-                    ✏️ Edit Problem
+                    Edit Problem
                   </button>
                   <button 
                     type="button" 
@@ -427,7 +427,7 @@ export function ProblemDetailModal({
                     onClick={() => setShowDeleteConfirm(true)}
                     title="Delete this problem permanently"
                   >
-                    🗑️ Delete
+                    Delete
                   </button>
                 </div>
               )}
@@ -436,7 +436,7 @@ export function ProblemDetailModal({
             {/* Resolved Celebration Banner */}
             {currentStatus === 'Resolved' && (
               <div className="resolved-celebration-banner">
-                <span style={{ fontSize: '1.4rem' }}>✅</span>
+                <span className="status-resolved-check">✓</span>
                 <div>
                   <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>Problem Solved & Marked as Resolved</h4>
                   <p style={{ margin: 0, fontSize: '0.85rem' }}>
@@ -456,14 +456,14 @@ export function ProblemDetailModal({
                 margin: '1rem 0'
               }}>
                 <h4 style={{ color: '#EF4444', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem' }}>
-                  ⚠️ Delete Problem Confirmation
+                  Delete Problem Confirmation
                 </h4>
                 <p style={{ fontSize: '0.9rem', marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>
                   Are you sure you want to permanently delete <strong>"{title}"</strong>? This will remove the row from the Supabase <code>posts</code> table. This action cannot be undone.
                 </p>
                 {deleteError && (
                   <div className="form-error-banner" style={{ marginBottom: '0.75rem' }}>
-                    ⚠️ {deleteError}
+                    {deleteError}
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
@@ -514,7 +514,7 @@ export function ProblemDetailModal({
 
                 {editError && (
                   <div className="form-error-banner" style={{ marginBottom: '1rem' }}>
-                    ⚠️ {editError}
+                    {editError}
                   </div>
                 )}
 
@@ -675,14 +675,14 @@ export function ProblemDetailModal({
               className={`modal-tab-pill-btn ${activeTab === 'solutions' ? 'active' : ''}`}
               onClick={() => setActiveTab('solutions')}
             >
-              💡 Solutions ({activeSolutions.length})
+              Solutions ({activeSolutions.length})
             </button>
             <button
               type="button"
               className={`modal-tab-pill-btn ${activeTab === 'comments' ? 'active' : ''}`}
               onClick={() => setActiveTab('comments')}
             >
-              💬 Comments ({activeComments.length})
+              Comments ({activeComments.length})
             </button>
           </div>
 
@@ -798,7 +798,7 @@ export function ProblemDetailModal({
                                 disabled={deletingSolId === sol.id}
                                 title="Delete your solution"
                               >
-                                {deletingSolId === sol.id ? 'Deleting...' : '🗑️ Delete'}
+                                {deletingSolId === sol.id ? 'Deleting...' : 'Delete'}
                               </button>
                             )}
                           </div>
@@ -817,9 +817,8 @@ export function ProblemDetailModal({
               {/* Citizen info notice */}
               {!isGuest && userRole === 'citizen' && (
                 <div className="citizen-transparency-box" style={{ marginTop: '1.25rem' }}>
-                  <div className="transparency-icon">💡</div>
                   <div className="transparency-text">
-                    <strong>Solutions Showcase:</strong> Solutions are proposed by registered universities and enterprise partners. Citizens can discuss this problem under the <strong>💬 Comments</strong> tab.
+                    <strong>Solutions Showcase:</strong> Solutions are proposed by registered universities and enterprise partners. Citizens can discuss this problem under the <strong>Comments</strong> tab.
                   </div>
                 </div>
               )}
@@ -827,7 +826,6 @@ export function ProblemDetailModal({
               {/* Guest info notice */}
               {isGuest && (
                 <div className="citizen-transparency-box" style={{ marginTop: '1.25rem' }}>
-                  <div className="transparency-icon">💡</div>
                   <div className="transparency-text" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '0.6rem' }}>
                     <div>
                       <strong>Are you a University or Enterprise Partner?</strong> Sign in to submit structured academic or industrial solutions for this problem.
@@ -881,13 +879,12 @@ export function ProblemDetailModal({
                       className="btn btn-blue"
                       disabled={submittingComment || !commentText.trim()}
                     >
-                      {submittingComment ? 'Posting...' : '💬 Post Comment'}
+                      {submittingComment ? 'Posting...' : 'Post Comment'}
                     </button>
                   </div>
                 </form>
               ) : isGuest ? (
                 <div className="citizen-transparency-box" style={{ margin: '1rem 0' }}>
-                  <div className="transparency-icon">💬</div>
                   <div className="transparency-text" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '0.6rem' }}>
                     <div>
                       <strong>Community Discussion:</strong> Sign in as a verified citizen to post comments on this problem.
@@ -901,9 +898,8 @@ export function ProblemDetailModal({
                 </div>
               ) : (
                 <div className="citizen-transparency-box" style={{ margin: '1rem 0' }}>
-                  <div className="transparency-icon">ℹ️</div>
                   <div className="transparency-text">
-                    <strong>Citizen Only Discussion:</strong> Only verified citizen accounts are authorized to post comments on citizen problems. As a {userRole === 'university' ? 'University Partner' : 'Industry Partner'}, you can submit structured proposals under the <strong>💡 Solutions</strong> tab.
+                    <strong>Citizen Only Discussion:</strong> Only verified citizen accounts are authorized to post comments on citizen problems. As a {userRole === 'university' ? 'University Partner' : 'Industry Partner'}, you can submit structured proposals under the <strong>Solutions</strong> tab.
                   </div>
                 </div>
               )}
@@ -960,7 +956,7 @@ export function ProblemDetailModal({
                                 disabled={deletingCommentId === c.id}
                                 title="Delete your comment"
                               >
-                                {deletingCommentId === c.id ? 'Deleting...' : '🗑️ Delete'}
+                                {deletingCommentId === c.id ? 'Deleting...' : 'Delete'}
                               </button>
                             )}
                           </div>

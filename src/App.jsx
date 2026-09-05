@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from './utils/supabase';
-import { DEMO_ACCOUNTS } from './data/mockData';
 import { Navbar } from './components/Navbar';
 import { InteractivePlayground } from './components/InteractivePlayground';
 
@@ -171,11 +170,6 @@ export default function App() {
     } catch (err) {
       setStatusMsg({ type: 'error', text: err.message || 'Authentication error.' });
     } finally { setLoading(false); }
-  };
-
-  const handleEnterDemo = (roleKey) => {
-    localStorage.setItem('fl_active_account', JSON.stringify(DEMO_ACCOUNTS[roleKey]));
-    window.location.href = `/${roleKey}.html`;
   };
 
   /* ═══════════════════════════════════════════════════════════
@@ -355,7 +349,7 @@ export default function App() {
               <div className="role-pills-row">
                 {['citizen', 'university', 'industry'].map((r) => (
                   <button key={r} type="button" className={`role-choice-btn ${selectedRole === r ? 'active' : ''}`} onClick={() => setSelectedRole(r)}>
-                    {r === 'citizen' ? '👤' : r === 'university' ? '🎓' : '🏢'} {r.charAt(0).toUpperCase() + r.slice(1)}
+                    {r.charAt(0).toUpperCase() + r.slice(1)}
                   </button>
                 ))}
               </div>

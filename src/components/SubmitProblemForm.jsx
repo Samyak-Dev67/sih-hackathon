@@ -47,7 +47,7 @@ export function SubmitProblemForm({ onSubmitProblem, onCancel }) {
 
         {errorMsg && (
           <div className="form-error-banner">
-            ⚠️ {errorMsg}
+            {errorMsg}
           </div>
         )}
 
