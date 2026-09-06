@@ -1525,6 +1525,9 @@ export function getAcceptedChallenges(universityId = null) {
 export function saveAcceptedChallenges(list) {
   try {
     localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(list));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('fl_challenge_accepted', { detail: list }));
+    }
   } catch (e) {
     console.error('Failed to save accepted challenges:', e);
   }
