@@ -125,7 +125,6 @@ export function ProblemWorkspace({
         <div className="workspace-header-meta">
           <span className="tag-pill category-tag">{claim.category}</span>
           <span className="tag-pill status-accepted-badge">ACCEPTED RESEARCH WORKSPACE</span>
-          <span className="tag-pill">Target Deadline: {claim.milestoneDeadline}</span>
           <span className="tag-pill" style={{ color: '#3b82f6', fontWeight: 700 }}>
             Progress: {claim.progress || 0}%
           </span>
