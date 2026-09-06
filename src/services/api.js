@@ -508,8 +508,7 @@ export async function createPost(postData = {}) {
     category: postData?.category ? postData.category.trim() : 'Infrastructure',
     score: typeof postData?.score === 'number' ? postData.score : 0,
     comments: commentsPayload,
-    solutions: Array.isArray(postData?.solutions) ? postData.solutions : [],
-    resolved: false
+    solutions: Array.isArray(postData?.solutions) ? postData.solutions : []
   };
 
   // If authorId is a valid UUID, include user_id
@@ -519,10 +518,35 @@ export async function createPost(postData = {}) {
 
   console.log('📡 [Supabase INSERT]: Attempting to insert into "posts" table:', payload);
 
-  const { data, error } = await supabase
-    .from('posts')
-    .insert([payload])
-    .select();
+  let currentPayload = { ...payload };
+  let data = null;
+  let error = null;
+
+  // Resilient retry: if PostgREST returns PGRST204 for a missing column (e.g. 'resolved'), strip it and retry
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await supabase
+      .from('posts')
+      .insert([currentPayload])
+      .select();
+
+    if (!res.error) {
+      data = res.data;
+      error = null;
+      break;
+    }
+
+    error = res.error;
+    if (res.error.code === 'PGRST204') {
+      const match = res.error.message.match(/Could not find the '([^']+)' column/i);
+      const missingCol = match ? match[1] : null;
+      if (missingCol && currentPayload[missingCol] !== undefined) {
+        console.warn(`⚠️ [Supabase Schema Mismatch]: Column '${missingCol}' not found in Supabase 'posts' table. Retrying insert without this column...`);
+        delete currentPayload[missingCol];
+        continue;
+      }
+    }
+    break;
+  }
 
   if (error) {
     console.error('❌ [Supabase INSERT Error]:', {
@@ -579,11 +603,35 @@ export async function updatePost(postId, updatedFields = {}) {
   if (Array.isArray(updatedFields.liked_by)) payload.liked_by = updatedFields.liked_by;
   if (Array.isArray(updatedFields.downvoted_by)) payload.downvoted_by = updatedFields.downvoted_by;
 
-  const { data, error } = await supabase
-    .from('posts')
-    .update(payload)
-    .eq('id', targetId)
-    .select();
+  let currentPayload = { ...payload };
+  let data = null;
+  let error = null;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await supabase
+      .from('posts')
+      .update(currentPayload)
+      .eq('id', targetId)
+      .select();
+
+    if (!res.error) {
+      data = res.data;
+      error = null;
+      break;
+    }
+
+    error = res.error;
+    if (res.error.code === 'PGRST204') {
+      const match = res.error.message.match(/Could not find the '([^']+)' column/i);
+      const missingCol = match ? match[1] : null;
+      if (missingCol && currentPayload[missingCol] !== undefined) {
+        console.warn(`⚠️ [Supabase Schema Mismatch]: Column '${missingCol}' not found in Supabase 'posts' table during update. Retrying update without this column...`);
+        delete currentPayload[missingCol];
+        continue;
+      }
+    }
+    break;
+  }
 
   if (error) {
     console.error('❌ [Supabase UPDATE Error]:', {
@@ -1402,10 +1450,10 @@ export async function toggleProblemStatus(postId, targetStatus, currentAccount) 
     throw err;
   }
 
-  console.log(`📡 [Supabase SELECT]: Fetching problem #${postId} to check resolved boolean...`);
+  console.log(`📡 [Supabase SELECT]: Fetching problem #${postId} to check status...`);
   const { data: postRecord, error: fetchErr } = await supabase
     .from('posts')
-    .select('id, resolved, title')
+    .select('*')
     .eq('id', postId)
     .single();
 
@@ -1424,11 +1472,40 @@ export async function toggleProblemStatus(postId, targetStatus, currentAccount) 
 
   console.log(`📡 [Supabase UPDATE]: Updating post #${postId} -> resolved: ${newResolvedBool}...`);
 
-  const { data, error } = await supabase
+  let data = null;
+  let error = null;
+
+  const res = await supabase
     .from('posts')
     .update({ resolved: newResolvedBool })
     .eq('id', postId)
     .select();
+
+  if (!res.error) {
+    data = res.data;
+  } else if (res.error.code === 'PGRST204') {
+    // If 'resolved' column does not exist in DB, fallback to storing status in comments metadata
+    console.warn(`⚠️ [Supabase Schema]: 'resolved' column not found in 'posts' table. Storing status in comments metadata...`);
+    const existingComments = Array.isArray(postRecord.comments) ? [...postRecord.comments] : [];
+    let metaIdx = existingComments.findIndex(c => c && typeof c === 'object' && c.__meta);
+    if (metaIdx >= 0) {
+      existingComments[metaIdx] = { ...existingComments[metaIdx], resolved: newResolvedBool, status: newResolvedBool ? 'Resolved' : 'Open' };
+    } else {
+      existingComments.unshift({ __meta: true, resolved: newResolvedBool, status: newResolvedBool ? 'Resolved' : 'Open' });
+    }
+    const metaRes = await supabase
+      .from('posts')
+      .update({ comments: existingComments })
+      .eq('id', postId)
+      .select();
+    if (!metaRes.error) {
+      data = metaRes.data;
+    } else {
+      error = metaRes.error;
+    }
+  } else {
+    error = res.error;
+  }
 
   if (error) {
     console.error('❌ [Supabase UPDATE Error (toggleProblemStatus)]:', {
