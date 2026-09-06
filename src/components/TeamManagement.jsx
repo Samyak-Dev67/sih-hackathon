@@ -10,6 +10,7 @@ import {
   deleteUniversityTeam,
   toggleTeamProblemAssignment
 } from '../services/api';
+import { CivicCertificateModal } from './CivicCertificateModal';
 
 const SUGGESTED_ROLES = [
   'Research Lead',
@@ -67,6 +68,23 @@ export function TeamManagement({
   });
 
   const [assigningTeam, setAssigningTeam] = useState(null); // team obj for quick problem assignment modal
+
+  // Certificate Modal State
+  const [certModalState, setCertModalState] = useState({
+    isOpen: false,
+    student: null,
+    team: null,
+    challenge: null
+  });
+
+  const handleOpenCertificate = (student, team = null, challenge = null) => {
+    setCertModalState({
+      isOpen: true,
+      student,
+      team,
+      challenge
+    });
+  };
 
   // Load data directly from Supabase backend
   const reloadData = async () => {
@@ -736,6 +754,14 @@ export function TeamManagement({
                                 <span className="student-chip-name">{stu.name}</span>
                                 <span className="student-chip-role">{stu.role}</span>
                               </div>
+                              <button
+                                type="button"
+                                className="team-chip-cert-btn"
+                                title={`Generate Civic Impact Certificate for ${stu.name}`}
+                                onClick={() => handleOpenCertificate(stu, team, assignedChallenges[0] || null)}
+                              >
+                                Cert
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -850,6 +876,24 @@ export function TeamManagement({
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             <div className="table-actions-group">
+                              <button
+                                type="button"
+                                className="btn-table-action btn-table-cert"
+                                title={`Generate Civic Impact Certificate for ${student.name}`}
+                                onClick={() => {
+                                  const studentTeam = teams.find(t =>
+                                    (t.members || []).some(m => String(m.id || m.name) === String(student.id || student.name))
+                                  );
+                                  const teamProblemIds = studentTeam?.associated_to || studentTeam?.assignedProblemIds || [];
+                                  const studentChallenge = availableAcceptedChallenges.find(p =>
+                                    teamProblemIds.some(id => String(id) === String(p.postId))
+                                  ) || availableAcceptedChallenges[0] || null;
+
+                                  handleOpenCertificate(student, studentTeam || null, studentChallenge);
+                                }}
+                              >
+                                Certificate
+                              </button>
                               <button
                                 type="button"
                                 className="btn-table-action"
@@ -1337,6 +1381,21 @@ export function TeamManagement({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* CIVIC RESEARCH CERTIFICATE & CREDENTIAL GENERATOR MODAL                  */}
+      {/* ========================================================================= */}
+      {certModalState.isOpen && (
+        <CivicCertificateModal
+          isOpen={certModalState.isOpen}
+          onClose={() => setCertModalState(prev => ({ ...prev, isOpen: false }))}
+          student={certModalState.student}
+          team={certModalState.team}
+          challenge={certModalState.challenge}
+          availableChallenges={availableAcceptedChallenges}
+          universityAccount={currentAccount}
+        />
       )}
     </div>
   );

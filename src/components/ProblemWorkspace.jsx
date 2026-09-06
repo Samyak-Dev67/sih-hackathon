@@ -8,6 +8,7 @@ import {
   getTeamsForProblem,
   getUniversityStudents
 } from '../services/api';
+import { CivicCertificateModal } from './CivicCertificateModal';
 
 export function ProblemWorkspace({ 
   postId, 
@@ -20,6 +21,8 @@ export function ProblemWorkspace({
   const [isAddingMilestone, setIsAddingMilestone] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDeadline, setNewDeadline] = useState('');
+  const [certStudent, setCertStudent] = useState(null);
+  const [certTeam, setCertTeam] = useState(null);
 
   const assignedTeams = getTeamsForProblem(claim?.universityId || currentAccount?.id, postId);
   const allStudents = getUniversityStudents(claim?.universityId || currentAccount?.id);
@@ -168,15 +171,27 @@ export function ProblemWorkspace({
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                   {assignedTeams.map((team) => {
-                    const teamStudents = allStudents.filter(s => (team.studentIds || []).includes(s.id));
+                    const teamStudents = (Array.isArray(team.members) && team.members.length > 0)
+                      ? team.members
+                      : allStudents.filter(s => (team.studentIds || []).includes(s.id));
                     return (
                       <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <span className="team-assigned-name-pill">{team.name}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
                           {teamStudents.map((s) => (
-                            <span key={s.id} className="student-role-pill" title={`${s.name} (${s.role})`}>
+                            <button
+                              key={s.id || s.name}
+                              type="button"
+                              className="student-role-pill student-cert-badge-btn"
+                              title={`View/Print Civic Impact Certificate for ${s.name}`}
+                              onClick={() => {
+                                setCertStudent(s);
+                                setCertTeam(team);
+                              }}
+                            >
                               {s.name} • {s.role}
-                            </span>
+                              <span className="cert-micro-tag">Certificate</span>
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -373,6 +388,28 @@ export function ProblemWorkspace({
           <span className="workspace-ready-badge">Ready for Collaboration Tools</span>
         </div>
       </div>
+
+      {/* Civic Impact Certificate Generator Modal */}
+      {certStudent && (
+        <CivicCertificateModal
+          isOpen={!!certStudent}
+          onClose={() => {
+            setCertStudent(null);
+            setCertTeam(null);
+          }}
+          student={certStudent}
+          team={certTeam}
+          challenge={{
+            postId: claim.postId,
+            title: claim.title,
+            category: claim.category,
+            progress: claim.progress,
+            universityName: claim.universityName,
+            milestoneDeadline: claim.milestoneDeadline
+          }}
+          universityAccount={currentAccount}
+        />
+      )}
     </div>
   );
 }
