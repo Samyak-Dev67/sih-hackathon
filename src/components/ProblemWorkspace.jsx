@@ -26,6 +26,13 @@ export function ProblemWorkspace({
   const [fundingInputs, setFundingInputs] = useState({});
   const [fundingErrors, setFundingErrors] = useState({});
 
+  const handlePresetAmount = (milestoneId, presetValue) => {
+    setFundingInputs(prev => ({ ...prev, [milestoneId]: String(presetValue) }));
+    if (fundingErrors[milestoneId]) {
+      setFundingErrors(prev => ({ ...prev, [milestoneId]: '' }));
+    }
+  };
+
   const handleMilestoneFund = (milestoneId) => {
     const amountStr = fundingInputs[milestoneId];
     const amount = Number(amountStr);
@@ -159,71 +166,83 @@ export function ProblemWorkspace({
           <p className="workspace-desc">{post.desc}</p>
         )}
 
-        {/* Stakeholder Collaboration Row */}
+        {/* Stakeholder Collaboration Cards Deck */}
         <div className="workspace-stakeholder-row">
-          <div className="stakeholder-chip uni-stakeholder">
-            <span className="stakeholder-label">LEAD RESEARCH INSTITUTION</span>
-            <div className="stakeholder-name-row">
-              <div className="stakeholder-avatar">
+          {/* Card 1: Lead Research Institution */}
+          <div className="stakeholder-card uni-stakeholder-card">
+            <div className="stakeholder-card-badge">
+              <span className="badge-bullet blue" />
+              <span>LEAD RESEARCH INSTITUTION</span>
+            </div>
+            <div className="stakeholder-card-main">
+              <div className="stakeholder-avatar uni-avatar">
                 {claim.universityName?.slice(0, 2).toUpperCase() || 'UN'}
               </div>
-              <strong>{claim.universityName}</strong>
+              <div className="stakeholder-text-wrap">
+                <strong className="stakeholder-name-text">{claim.universityName}</strong>
+                <span className="stakeholder-subtext">Verified Academic Research Lab</span>
+              </div>
+            </div>
+            <div className="stakeholder-card-footer">
+              <span className="stakeholder-meta-pill">Research Lead</span>
             </div>
           </div>
 
-          <div className="stakeholder-chip team-stakeholder">
-            <div className="stakeholder-label-row">
-              <span className="stakeholder-label">ASSIGNED RESEARCH TEAMS</span>
+          {/* Card 2: Assigned Research Teams */}
+          <div className="stakeholder-card team-stakeholder-card">
+            <div className="stakeholder-card-badge space-between">
+              <div className="badge-bullet-group">
+                <span className="badge-bullet purple" />
+                <span>ASSIGNED RESEARCH COHORT</span>
+              </div>
               {assignedTeams.length > 0 && isUniversity && (
                 <button
                   type="button"
                   className="stakeholder-manage-link"
                   onClick={onBack}
-                  title="Manage teams in Team Management"
+                  title="Configure in Team Management"
                 >
                   Manage Teams →
                 </button>
               )}
             </div>
 
-            <div className="stakeholder-content-box">
+            <div className="stakeholder-card-main team-main">
               {assignedTeams.length === 0 ? (
-                <div className="stakeholder-empty-state">
-                  <span className="text-muted" style={{ fontSize: '0.85rem' }}>No student team assigned yet</span>
+                <div className="stakeholder-empty-box">
+                  <span className="empty-team-label">No student team assigned yet</span>
                   {isUniversity && (
                     <button
                       type="button"
                       className="btn-link-action"
-                      style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}
                       onClick={onBack}
                     >
-                      Configure in Team Management →
+                      Assign teams in Team Management →
                     </button>
                   )}
                 </div>
               ) : (
-                <div className="workspace-teams-stack">
+                <div className="workspace-teams-scroll">
                   {assignedTeams.map((team) => {
                     const teamStudents = (Array.isArray(team.members) && team.members.length > 0)
                       ? team.members
                       : allStudents.filter(s => (team.studentIds || []).includes(s.id));
                     return (
-                      <div key={team.id} className="workspace-team-group">
-                        <div className="workspace-team-name-tag">
-                          <span className="team-indicator-dot" />
+                      <div key={team.id} className="workspace-team-card-inner">
+                        <div className="workspace-team-title-row">
                           <strong className="workspace-team-title">{team.name}</strong>
                           {team.department && (
-                            <span className="team-dept-subtext">({team.department})</span>
+                            <span className="team-dept-badge">{team.department}</span>
                           )}
                         </div>
                         {teamStudents.length > 0 ? (
-                          <div className="workspace-team-students-list">
+                          <div className="workspace-team-members-pills">
                             {teamStudents.map((s) => (
-                              <div key={s.id || s.name} className="workspace-student-row">
-                                <span className="student-bullet" />
-                                <span className="workspace-student-name">{s.name}</span>
-                                <span className="workspace-student-role-badge">{s.role}</span>
-                              </div>
+                              <span key={s.id || s.name} className="workspace-member-pill" title={`${s.name} - ${s.role}`}>
+                                <span className="member-avatar-micro">{s.initials || s.name?.slice(0, 2).toUpperCase()}</span>
+                                <span className="member-name-str">{s.name}</span>
+                                {s.role && <span className="member-role-str">({s.role})</span>}
+                              </span>
                             ))}
                           </div>
                         ) : (
@@ -235,37 +254,60 @@ export function ProblemWorkspace({
                 </div>
               )}
             </div>
+
+            <div className="stakeholder-card-footer">
+              <span className="stakeholder-meta-pill">
+                {assignedTeams.length > 0 ? `${assignedTeams.length} Team(s) Active` : 'Cohort Unassigned'}
+              </span>
+            </div>
           </div>
 
-          <div className="stakeholder-chip ind-stakeholder">
-            <span className="stakeholder-label">INDUSTRY SPONSOR</span>
-            <div className="stakeholder-name-row">
+          {/* Card 3: Industry Sponsor */}
+          <div className="stakeholder-card ind-stakeholder-card">
+            <div className="stakeholder-card-badge">
+              <span className="badge-bullet green" />
+              <span>INDUSTRY SPONSOR & GRANTS</span>
+            </div>
+
+            <div className="stakeholder-card-main">
               {claim.fundedByIndustry ? (
                 <>
                   <div className="stakeholder-avatar ind-avatar">
                     {claim.fundedByIndustry.name?.slice(0, 2).toUpperCase() || 'IN'}
                   </div>
-                  <strong>{claim.fundedByIndustry.name}</strong>
-                  <span className="stakeholder-status-pill">Empowering Partner</span>
+                  <div className="stakeholder-text-wrap">
+                    <strong className="stakeholder-name-text">{claim.fundedByIndustry.name}</strong>
+                    <span className="stakeholder-subtext">Empowering Industry Partner</span>
+                  </div>
                 </>
               ) : (
-                <div className="awaiting-funding-box">
-                  <span className="text-muted">Awaiting Industry Funding Partner</span>
+                <div className="awaiting-sponsor-wrap">
+                  <div className="awaiting-sponsor-info">
+                    <strong className="awaiting-title">Awaiting Industry Partner</strong>
+                    <span className="awaiting-desc">Back this project with milestone research grants</span>
+                  </div>
                   {currentAccount?.role === 'industry' && (
                     <button 
                       type="button" 
-                      className="btn btn-blue btn-sm" 
+                      className="btn btn-blue btn-sm btn-empower-card" 
                       onClick={() => {
                         const updated = empowerChallenge(claim.postId, currentAccount);
                         if (updated) setClaim(updated);
                         if (onFundChallenge) onFundChallenge(claim.postId);
                       }}
-                      style={{ marginLeft: '0.75rem', fontWeight: 600 }}
                     >
-                      Empower Project
+                      Empower Initiative
                     </button>
                   )}
                 </div>
+              )}
+            </div>
+
+            <div className="stakeholder-card-footer">
+              {claim.fundedByIndustry ? (
+                <span className="stakeholder-meta-pill active-sponsor">Empowering Partner</span>
+              ) : (
+                <span className="stakeholder-meta-pill pending-sponsor">Open for Sponsorship</span>
               )}
             </div>
           </div>
@@ -278,9 +320,9 @@ export function ProblemWorkspace({
       <div className="workspace-milestones-card">
         <div className="milestones-card-header">
           <div>
-            <h2 className="milestones-card-title">Research Milestones & Progress</h2>
+            <h2 className="milestones-card-title">Research Roadmap & Escrow Grants</h2>
             <p className="milestones-card-subtitle">
-              Milestones set by the university dictate the progress bar shown on the problem dashboard.
+              Milestones completed by the university dictate project progress. Industry partners can allocate grants released automatically upon completion.
             </p>
           </div>
 
@@ -364,119 +406,214 @@ export function ProblemWorkspace({
               <p>No milestones set yet. Click "+ Set Milestone" to establish your research roadmap.</p>
             </div>
           ) : (
-            milestones.map((m, idx) => (
-              <div key={m.id || idx} className="milestone-card-wrapper">
-                <div 
-                  className={`milestone-item ${m.completed ? 'is-completed' : ''}`}
-                >
-                  <label className="milestone-checkbox-wrap">
-                    <input
-                      type="checkbox"
-                      checked={!!m.completed}
-                      onChange={() => handleToggle(m.id)}
-                      className="milestone-checkbox"
-                      disabled={!isUniversity}
-                      title={isUniversity ? "Check to complete milestone" : "View-only for industry sponsor"}
-                    />
-                    <span className="milestone-custom-check" />
-                  </label>
+            milestones.map((m, idx) => {
+              const isFunded = Boolean(m.funding && m.funding.amount);
+              const fundAmount = isFunded ? Number(m.funding.amount) : 0;
+              const isCompleted = Boolean(m.completed);
 
-                  <div className="milestone-info">
-                    <span className="milestone-title-text">{m.title}</span>
-                    <div className="milestone-sub-meta">
-                      <span className="milestone-target-date">Target: {m.deadline}</span>
+              return (
+                <div key={m.id || idx} className={`workspace-milestone-card ${isCompleted ? 'is-completed' : ''}`}>
+                  {/* Top Bar of Milestone */}
+                  <div className="milestone-card-top">
+                    <div className="milestone-top-left">
+                      <span className="milestone-index-badge">MILESTONE {idx + 1}</span>
+                      <div className="milestone-deadline-pill">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        <span>Target: {m.deadline}</span>
+                      </div>
+                    </div>
 
-                      {/* Milestone Funding Details */}
-                      {m.funding && (
-                        <span className={`milestone-funding-pill ${m.completed ? 'is-transferred' : 'is-committed'}`}>
-                          <span className={`funding-status-dot ${m.completed ? 'green' : 'blue'}`} />
-                          {m.completed
-                            ? `₹${Number(m.funding.amount).toLocaleString('en-IN')} transferred ${isUniversity ? `from ${m.funding.industryName || 'Industry Partner'}` : `to ${claim.universityName || 'University'}`}`
-                            : `₹${Number(m.funding.amount).toLocaleString('en-IN')} committed ${isUniversity ? `by ${m.funding.industryName || 'Industry Partner'}` : 'on milestone completion'}`}
+                    <div className="milestone-actions-cluster">
+                      {isFunded && (
+                        <span className={`milestone-funding-badge ${isCompleted ? 'badge-transferred' : 'badge-committed'}`}>
+                          {isCompleted ? 'TRANSFERRED' : 'ESCROW COMMITTED'}
                         </span>
+                      )}
+
+                      <span className={`milestone-status-tag ${isCompleted ? 'tag-completed' : 'tag-pending'}`}>
+                        {isCompleted ? 'COMPLETED' : 'IN PROGRESS'}
+                      </span>
+
+                      {isUniversity && (
+                        <button
+                          type="button"
+                          className="milestone-delete-btn"
+                          onClick={() => handleDelete(m.id)}
+                          title="Delete milestone"
+                          aria-label="Delete milestone"
+                        >
+                          ✕
+                        </button>
                       )}
                     </div>
                   </div>
 
-                  <div className="milestone-actions-cluster">
-                    {m.funding && (
-                      <span className={`milestone-funding-badge ${m.completed ? 'badge-transferred' : 'badge-committed'}`}>
-                        {m.completed ? 'TRANSFERRED' : 'COMMITTED'}
-                      </span>
-                    )}
-
-                    <span className={`milestone-status-tag ${m.completed ? 'tag-completed' : 'tag-pending'}`}>
-                      {m.completed ? 'COMPLETED' : 'IN PROGRESS'}
-                    </span>
-
-                    {isUniversity && (
-                      <button
-                        type="button"
-                        className="milestone-delete-btn"
-                        onClick={() => handleDelete(m.id)}
-                        title="Delete milestone"
-                        aria-label="Delete milestone"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Industry Funding Input Box for un-funded milestones */}
-                {!m.funding && !m.completed && currentAccount?.role === 'industry' && (
-                  <div className="milestone-fund-box-row">
-                    <span className="fund-box-label">Fund Milestone:</span>
-                    <div className="fund-input-wrapper">
-                      <span className="rupee-currency-prefix">₹</span>
+                  {/* Main Milestone Body */}
+                  <div className="milestone-main-row">
+                    <label className="milestone-checkbox-wrap">
                       <input
-                        type="number"
-                        min="100"
-                        step="500"
-                        placeholder="Enter amount (e.g. 50000)"
-                        value={fundingInputs[m.id] || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setFundingInputs(prev => ({ ...prev, [m.id]: val }));
-                          if (fundingErrors[m.id]) setFundingErrors(prev => ({ ...prev, [m.id]: '' }));
-                        }}
-                        className="milestone-fund-input"
+                        type="checkbox"
+                        checked={isCompleted}
+                        onChange={() => handleToggle(m.id)}
+                        className="milestone-checkbox"
+                        disabled={!isUniversity}
+                        title={isUniversity ? "Mark milestone completed" : "View-only for industry sponsor"}
                       />
+                      <span className="milestone-custom-check" />
+                    </label>
+
+                    <div className="milestone-title-wrapper">
+                      <span className="milestone-title-text">{m.title}</span>
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn-blue btn-sm fund-commit-btn"
-                      onClick={() => handleMilestoneFund(m.id)}
-                    >
-                      Fund Milestone
-                    </button>
-                    {fundingErrors[m.id] && (
-                      <span className="fund-error-text">{fundingErrors[m.id]}</span>
-                    )}
                   </div>
-                )}
-              </div>
-            ))
+
+                  {/* Escrow Guarantee Status Banner if funded */}
+                  {isFunded && (
+                    <div className={`milestone-escrow-banner ${isCompleted ? 'is-transferred' : 'is-committed'}`}>
+                      <div className="escrow-banner-left">
+                        <div className={`escrow-banner-icon ${isCompleted ? 'green' : 'blue'}`}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                          </svg>
+                        </div>
+                        <div className="escrow-banner-content">
+                          <div className="escrow-banner-heading">
+                            <strong className="escrow-amount-str">₹{fundAmount.toLocaleString('en-IN')} Research Grant</strong>
+                            <span className="escrow-subbadge">
+                              {isCompleted ? 'Disbursed to Lead Institution' : 'Held Securely in Escrow'}
+                            </span>
+                          </div>
+                          <p className="escrow-banner-subtext">
+                            {isCompleted
+                              ? `Funds released to ${claim.universityName || 'University'} upon verified milestone completion. Empowered by ${m.funding.industryName || 'Industry Partner'}.`
+                              : `Committed by ${m.funding.industryName || 'Industry Partner'}. Released automatically to the university upon verified milestone completion.`}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Industry Research Grant Allocation Panel if un-funded */}
+                  {!isFunded && !isCompleted && currentAccount?.role === 'industry' && (
+                    <div className="milestone-grant-allocation-card">
+                      <div className="grant-allocation-header">
+                        <div className="grant-header-title">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                          </svg>
+                          <span>PLEDGE RESEARCH GRANT FOR THIS MILESTONE</span>
+                        </div>
+                        <span className="grant-escrow-hint">Held in escrow until milestone is delivered</span>
+                      </div>
+
+                      <div className="grant-quick-presets">
+                        <span className="presets-label">Quick Grants:</span>
+                        {[25000, 50000, 100000, 250000].map(val => (
+                          <button
+                            key={val}
+                            type="button"
+                            className={`grant-preset-pill ${fundingInputs[m.id] === String(val) ? 'active' : ''}`}
+                            onClick={() => handlePresetAmount(m.id, val)}
+                          >
+                            + ₹{val.toLocaleString('en-IN')}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="grant-input-row">
+                        <div className="grant-input-wrapper">
+                          <span className="currency-symbol">₹</span>
+                          <input
+                            type="number"
+                            min="500"
+                            step="500"
+                            placeholder="Amount in INR (e.g. 50000)"
+                            value={fundingInputs[m.id] || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFundingInputs(prev => ({ ...prev, [m.id]: val }));
+                              if (fundingErrors[m.id]) setFundingErrors(prev => ({ ...prev, [m.id]: '' }));
+                            }}
+                            className="grant-input-field"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-blue grant-commit-btn"
+                          onClick={() => handleMilestoneFund(m.id)}
+                        >
+                          Commit Escrow Grant
+                        </button>
+                      </div>
+
+                      {fundingErrors[m.id] && (
+                        <div className="grant-error-row">
+                          <span>{fundingErrors[m.id]}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* University view if un-funded */}
+                  {!isFunded && !isCompleted && currentAccount?.role === 'university' && (
+                    <div className="milestone-grant-unfunded-hint">
+                      <span className="unfunded-hint-bullet" />
+                      <span>Open for industry grant sponsorship</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
       </div>
 
-      {/* Clean Workspace Area Ready for Next Modules */}
+      {/* Collaboration Hub Readiness Card */}
       <div className="workspace-canvas-container">
-        <div className="workspace-empty-state">
-          <div className="workspace-empty-icon">
-            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="3"></rect>
-              <line x1="9" y1="3" x2="9" y2="21"></line>
-              <line x1="3" y1="9" x2="21" y2="9"></line>
-            </svg>
+        <div className="workspace-canvas-card">
+          <div className="workspace-canvas-header">
+            <div className="canvas-icon-wrap">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+                <line x1="3" y1="9" x2="21" y2="9" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="canvas-card-title">Academic-Industry Collaboration Bridge Active</h3>
+              <p className="canvas-card-desc">
+                Research workspace established for <strong>{claim.universityName}</strong>
+                {claim.fundedByIndustry ? ` and ${claim.fundedByIndustry.name}` : ''}.
+              </p>
+            </div>
           </div>
-          <h3>Project Workspace Active</h3>
-          <p>
-            Collaboration workspace established for <strong>{claim.universityName}</strong>
-            {claim.fundedByIndustry ? ` and ${claim.fundedByIndustry.name}` : ''}.
-          </p>
-          <span className="workspace-ready-badge">Ready for Collaboration Tools</span>
+
+          <div className="canvas-features-grid">
+            <div className="canvas-feature-item">
+              <div className="feature-dot blue" />
+              <div>
+                <strong>Milestone Escrow Grants</strong>
+                <span>Transparent grant disbursements released on verified deliverables</span>
+              </div>
+            </div>
+            <div className="canvas-feature-item">
+              <div className="feature-dot purple" />
+              <div>
+                <strong>Direct Student Cohort Mentorship</strong>
+                <span>Direct collaboration with faculty leads and student researchers</span>
+              </div>
+            </div>
+            <div className="canvas-feature-item">
+              <div className="feature-dot green" />
+              <div>
+                <strong>Lab Telemetry & Prototypes</strong>
+                <span>Shared test datasets, field validation metrics, and milestone reports</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

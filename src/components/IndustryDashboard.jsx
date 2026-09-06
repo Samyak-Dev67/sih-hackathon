@@ -83,81 +83,94 @@ export function IndustryDashboard({
       {/* TAB 1: YOU SUPPORT (Personalized for this specific Industry account)      */}
       {/* ========================================================================= */}
       {activeTab === 'supported' && (
-        <div className="uni-workspace-dashboard">
+        <div className="industry-dashboard-content">
           {/* Workspace Hero Banner */}
-          <div className="uni-workspace-header-row">
-            <div>
-              <h1 className="uni-workspace-title">
+          <div className="industry-hero-banner">
+            <div className="industry-hero-text">
+              <div className="industry-eyebrow">
+                <span className="industry-pulse-dot" />
+                <span>ENTERPRISE COLLABORATION PORTAL</span>
+              </div>
+              <h1 className="industry-title">
                 Supported Initiatives: {currentAccount?.name || 'Industry Partner'}
               </h1>
-              <p className="uni-workspace-subtitle">
+              <p className="industry-subtitle">
                 Review academic research progress, collaborate with university student cohorts, and monitor milestone funding disbursements.
               </p>
             </div>
             <button
               type="button"
-              className="btn btn-blue uni-explore-btn"
+              className="btn btn-outline industry-explore-btn"
               onClick={() => setActiveTab('discover')}
             >
-              Explore All Challenges
+              Explore All Challenges →
             </button>
           </div>
 
           {/* 3 Metric Cards for Industry */}
-          <div className="uni-metrics-grid">
-            <div className="uni-metric-card">
-              <span className="uni-metric-label">PROJECTS SUPPORTED</span>
-              <span className="uni-metric-value text-blue">{supportedChallenges.length}</span>
+          <div className="industry-metrics-grid">
+            <div className="industry-metric-card metric-blue">
+              <div className="industry-metric-header">
+                <span className="industry-metric-label">PROJECTS SUPPORTED</span>
+                <span className="industry-metric-badge badge-blue">ACTIVE</span>
+              </div>
+              <div className="industry-metric-value text-blue">{supportedChallenges.length}</div>
+              <span className="industry-metric-subtext">University challenges backed</span>
             </div>
 
-            <div className="uni-metric-card">
-              <span className="uni-metric-label">TOTAL FUNDS COMMITTED</span>
-              <span className="uni-metric-value text-orange">
+            <div className="industry-metric-card metric-orange">
+              <div className="industry-metric-header">
+                <span className="industry-metric-label">TOTAL FUNDS COMMITTED</span>
+                <span className="industry-metric-badge badge-orange">IN ESCROW</span>
+              </div>
+              <div className="industry-metric-value text-orange">
                 ₹{totalCommitted.toLocaleString('en-IN')}
-              </span>
+              </div>
+              <span className="industry-metric-subtext">Held in escrow until milestone delivery</span>
             </div>
 
-            <div className="uni-metric-card">
-              <span className="uni-metric-label">TOTAL FUNDS TRANSFERRED</span>
-              <span className="uni-metric-value text-green">
+            <div className="industry-metric-card metric-green">
+              <div className="industry-metric-header">
+                <span className="industry-metric-label">TOTAL FUNDS TRANSFERRED</span>
+                <span className="industry-metric-badge badge-green">DISBURSED</span>
+              </div>
+              <div className="industry-metric-value text-green">
                 ₹{totalTransferred.toLocaleString('en-IN')}
-              </span>
+              </div>
+              <span className="industry-metric-subtext">Released upon verified completion</span>
             </div>
           </div>
 
           {/* Supported Projects List */}
-          <div className="uni-challenges-section" style={{ marginTop: '2rem' }}>
-            <div className="section-title-row" style={{ marginBottom: '1.25rem' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                Active Supported Challenges ({supportedChallenges.length})
-              </h2>
+          <div className="industry-supported-section">
+            <div className="industry-section-header">
+              <h2>Active Supported Challenges ({supportedChallenges.length})</h2>
+              <span className="industry-section-count">Directing research grants to verified university solutions</span>
             </div>
 
             {supportedChallenges.length === 0 ? (
-              <div className="empty-feed-card" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
-                <div style={{ marginBottom: '1rem', color: 'var(--text-muted)' }}>
+              <div className="industry-empty-card">
+                <div className="industry-empty-icon">
                   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <circle cx="12" cy="12" r="10" />
                     <line x1="12" y1="8" x2="12" y2="12" />
                     <line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
                 </div>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-                  You are not supporting any challenge yet
-                </h3>
-                <p style={{ color: 'var(--text-muted)', maxWidth: '480px', margin: '0 auto 1.5rem auto' }}>
-                  Browse citizen problems that have been accepted by universities, review their research roadmap, and empower their milestones.
+                <h3>You are not supporting any challenge yet</h3>
+                <p>
+                  Browse citizen problems that have been accepted by universities, review their research roadmap, and empower their milestones with research grants.
                 </p>
                 <button
                   type="button"
                   className="btn btn-blue"
                   onClick={() => setActiveTab('discover')}
                 >
-                  Discover Open & Accepted Challenges
+                  Discover Open & Accepted Challenges →
                 </button>
               </div>
             ) : (
-              <div className="uni-claims-grid">
+              <div className="industry-supported-grid">
                 {supportedChallenges.map((claim) => {
                   const milestones = claim.milestones || [];
                   const completedCount = milestones.filter(m => m.completed).length;
@@ -179,75 +192,70 @@ export function IndustryDashboard({
                   return (
                     <div 
                       key={claim.id || claim.postId}
-                      className="uni-claim-card"
+                      className="industry-supported-card"
                       onClick={() => onOpenWorkspace && onOpenWorkspace(claim.postId)}
-                      style={{ cursor: 'pointer' }}
                     >
-                      <div className="uni-claim-card-top">
-                        <span className="tag-pill category-tag">{claim.category}</span>
-                        <span className="tag-pill status-accepted-badge">SUPPORTED</span>
+                      <div className="industry-card-top-row">
+                        <div className="industry-card-badges">
+                          <span className="tag-pill category-tag">{claim.category}</span>
+                          <span className="tag-pill status-accepted-badge">SUPPORTED</span>
+                        </div>
+                        <span className="industry-card-id">ID #{claim.postId}</span>
                       </div>
 
-                      <h3 className="uni-claim-card-title">{claim.title}</h3>
+                      <h3 className="industry-card-title">{claim.title}</h3>
 
-                      {/* Lead University */}
-                      <div className="uni-claim-team-row" style={{ marginTop: '0.5rem' }}>
-                        <span className="uni-claim-team-label">Lead Institution:</span>
-                        <strong style={{ color: 'var(--text-primary)', fontSize: '0.85rem' }}>
-                          {claim.universityName || 'University Lab'}
-                        </strong>
+                      <div className="industry-card-meta-list">
+                        <div className="industry-card-meta-item">
+                          <span className="industry-meta-label">Lead Institution:</span>
+                          <strong className="industry-meta-value">{claim.universityName || 'University Lab'}</strong>
+                        </div>
+
+                        <div className="industry-card-meta-item">
+                          <span className="industry-meta-label">Assigned Cohort:</span>
+                          <span className="industry-meta-value">
+                            {assignedTeams.length > 0 
+                              ? `${assignedTeams.length} research team(s) active` 
+                              : 'Faculty-led research team'}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* Assigned Student Teams */}
-                      <div className="uni-claim-team-row">
-                        <span className="uni-claim-team-label">Assigned Cohort:</span>
-                        <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                          {assignedTeams.length > 0 
-                            ? `${assignedTeams.length} research team(s) working` 
-                            : 'Lead faculty assigned'}
-                        </span>
-                      </div>
-
-                      {/* Funding Summary Pill */}
-                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', margin: '0.75rem 0' }}>
-                        {claimTransferred > 0 && (
-                          <span className="milestone-funding-pill is-transferred">
-                            <span className="funding-status-dot green" />
-                            ₹{claimTransferred.toLocaleString('en-IN')} transferred
-                          </span>
-                        )}
-                        {claimCommitted > 0 && (
-                          <span className="milestone-funding-pill is-committed">
-                            <span className="funding-status-dot blue" />
-                            ₹{claimCommitted.toLocaleString('en-IN')} committed
-                          </span>
-                        )}
-                        {claimTransferred === 0 && claimCommitted === 0 && (
-                          <span className="tag-pill" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            No milestone funded yet
-                          </span>
-                        )}
+                      {/* Financial status strip */}
+                      <div className="industry-card-funding-row">
+                        <div className="funding-chip committed">
+                          <span className="funding-chip-dot blue" />
+                          <span className="funding-chip-label">Committed:</span>
+                          <strong className="funding-chip-amount">₹{claimCommitted.toLocaleString('en-IN')}</strong>
+                        </div>
+                        <div className="funding-chip transferred">
+                          <span className="funding-chip-dot green" />
+                          <span className="funding-chip-label">Transferred:</span>
+                          <strong className="funding-chip-amount">₹{claimTransferred.toLocaleString('en-IN')}</strong>
+                        </div>
                       </div>
 
                       {/* Milestone Progress Bar */}
-                      <div className="uni-claim-progress-wrap">
-                        <div className="uni-claim-progress-text">
-                          <span>{completedCount} of {milestones.length} Milestones</span>
-                          <span>{claim.progress || 0}%</span>
+                      <div className="industry-card-progress-section">
+                        <div className="industry-card-progress-labels">
+                          <span className="progress-count-text">
+                            {completedCount} of {milestones.length} Milestones Completed
+                          </span>
+                          <span className="progress-percent-text">{claim.progress || 0}% Complete</span>
                         </div>
-                        <div className="uni-claim-progress-track">
+                        <div className="industry-card-progress-track">
                           <div 
-                            className="uni-claim-progress-bar"
+                            className="industry-card-progress-bar"
                             style={{ width: `${claim.progress || 0}%` }}
                           />
                         </div>
                       </div>
 
-                      {/* Card Action */}
-                      <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                      {/* Action Row */}
+                      <div className="industry-card-action-row">
                         <button
                           type="button"
-                          className="btn btn-outline btn-sm"
+                          className="btn btn-outline btn-sm industry-card-btn"
                           onClick={(e) => {
                             e.stopPropagation();
                             if (onOpenWorkspace) onOpenWorkspace(claim.postId);

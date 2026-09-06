@@ -172,36 +172,6 @@ export default function App() {
     } finally { setLoading(false); }
   };
 
-  const handleEnterDemo = (role, customId = null, customName = null) => {
-    const demoAccounts = {
-      citizen: {
-        id: 'citz-demo-1',
-        name: 'Aarav Sharma',
-        email: 'aarav.citizen@example.com',
-        role: 'citizen',
-        initials: 'AS'
-      },
-      university: {
-        id: customId || 'uni-demo-1',
-        name: customName || 'IIT Delhi Research Lab',
-        email: customId === 'uni-demo-2' ? 'lab@iisc.ac.in' : 'lab@iitd.ac.in',
-        role: 'university',
-        initials: customId === 'uni-demo-2' ? 'IISC' : 'IIT'
-      },
-      industry: {
-        id: 'ind-demo-1',
-        name: 'Tata Sustainability Labs',
-        email: 'contact@tatainnovation.com',
-        role: 'industry',
-        initials: 'TSL'
-      }
-    };
-    const acc = demoAccounts[role] || demoAccounts.citizen;
-    localStorage.setItem('fl_active_account', JSON.stringify(acc));
-    setCurrentUser(acc);
-    window.location.href = `/${acc.role}.html`;
-  };
-
   /* ═══════════════════════════════════════════════════════════
      RENDER
   ═══════════════════════════════════════════════════════════ */
@@ -404,16 +374,6 @@ export default function App() {
                 {loading ? 'Processing…' : authMode === 'login' ? `Login as ${selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}` : `Sign Up as ${selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}`}
               </button>
             </form>
-            <div className="instant-demo-footer">
-              <div className="demo-divider-row"><span>OR PREVIEW DEMO DASHBOARD WITHOUT LOGIN</span></div>
-              <p className="demo-subnote">Skip login to test sample accounts directly:</p>
-              <div className="demo-buttons-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
-                <button type="button" onClick={() => handleEnterDemo('citizen')} className="demo-role-btn"><span className="badge-citz">CITZ</span> Citizen</button>
-                <button type="button" onClick={() => handleEnterDemo('university', 'uni-demo-1', 'IIT Delhi Research Lab')} className="demo-role-btn" title="Test as University A"><span className="badge-uni">UNI</span> IIT Delhi</button>
-                <button type="button" onClick={() => handleEnterDemo('university', 'uni-demo-2', 'IISc Bangalore Systems Lab')} className="demo-role-btn" title="Test as University B"><span className="badge-uni">UNI</span> IISc Bangalore</button>
-                <button type="button" onClick={() => handleEnterDemo('industry')} className="demo-role-btn"><span className="badge-inds">INDS</span> Industry</button>
-              </div>
-            </div>
           </div>
         </div>
       )}

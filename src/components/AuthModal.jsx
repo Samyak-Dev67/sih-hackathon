@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { X, GraduationCap, Users, Building2, AlertCircle, CheckCircle, ArrowRight, Lock, Mail, User, MapPin } from 'lucide-react';
 import { supabase } from '../utils/supabase';
-import { DEMO_PROFILES } from '../data/mockData';
 
 export function AuthModal({ isOpen, onClose, initialMode = 'login', onAuthSuccess }) {
   const [authMode, setAuthMode] = useState(initialMode); // 'login' or 'signup'
@@ -102,16 +101,10 @@ export function AuthModal({ isOpen, onClose, initialMode = 'login', onAuthSucces
       }
     } catch (err) {
       console.warn('Supabase auth response:', err.message);
-      setErrorMessage(err.message || 'Authentication failed. Please check your credentials or use the instant Demo Login.');
+      setErrorMessage(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleInstantDemoLogin = (role) => {
-    const profile = DEMO_PROFILES[role];
-    onAuthSuccess(profile);
-    onClose();
   };
 
   return (
@@ -363,42 +356,6 @@ export function AuthModal({ isOpen, onClose, initialMode = 'login', onAuthSucces
             )}
           </button>
         </form>
-
-        {/* Instant Demo Role Login */}
-        <div className="demo-evaluator-section">
-          <div className="demo-divider">
-            <span>Instant Demo Access (No Email Verification Needed)</span>
-          </div>
-
-          <div className="demo-shortcuts-grid">
-            <button 
-              type="button" 
-              className="demo-shortcut-btn citizen"
-              onClick={() => handleInstantDemoLogin('citizen')}
-            >
-              <Users size={14} />
-              <span>Demo Citizen</span>
-            </button>
-
-            <button 
-              type="button" 
-              className="demo-shortcut-btn university"
-              onClick={() => handleInstantDemoLogin('university')}
-            >
-              <GraduationCap size={14} />
-              <span>Demo University</span>
-            </button>
-
-            <button 
-              type="button" 
-              className="demo-shortcut-btn industry"
-              onClick={() => handleInstantDemoLogin('industry')}
-            >
-              <Building2 size={14} />
-              <span>Demo Industry</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
