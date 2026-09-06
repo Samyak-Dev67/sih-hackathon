@@ -18,7 +18,16 @@ export function ProblemWorkspace({
   onBack,
   onFundChallenge 
 }) {
-  const [claim, setClaim] = useState(() => getChallengeWorkspace(postId));
+  const [claim, setClaim] = useState(() => post?.accepted_by || getChallengeWorkspace(postId));
+
+  React.useEffect(() => {
+    if (post?.accepted_by) {
+      setClaim(post.accepted_by);
+    } else {
+      setClaim(getChallengeWorkspace(postId));
+    }
+  }, [post, postId]);
+
   const [isAddingMilestone, setIsAddingMilestone] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDeadline, setNewDeadline] = useState('');

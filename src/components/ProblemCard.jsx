@@ -6,12 +6,11 @@ export function ProblemCard({
   onVote, 
   onDownvote, 
   onSelectPost, 
-  currentAccountId,
-  currentAccount,
-  onDeleteProblem,
-  onToggleResolve,
-  onOpenWorkspace,
-  onAcceptChallenge
+  currentAccountId, 
+  currentAccount, 
+  onDeleteProblem, 
+  onOpenWorkspace, 
+  onAcceptChallenge 
 }) {
   const {
     id,
@@ -22,17 +21,16 @@ export function ProblemCard({
     score = 0,
     created_at,
     liked_by = [],
-    downvoted_by = [],
-    resolved = false
+    downvoted_by = []
   } = post;
 
-  const acceptedClaim = getChallengeWorkspace(id);
+  const acceptedClaim = post.accepted_by || getChallengeWorkspace(id);
 
   const accountObj = currentAccount || (currentAccountId ? { id: currentAccountId } : null);
   const isAuthor = isPostAuthor(post, accountObj);
   const authorInfo = getPostAuthorInfo(post, accountObj);
   const status = getPostStatus(post);
-  const isResolved = status === 'Resolved' || resolved === true || post.resolved === true;
+  const isCompleted = status === 'Completed' || (acceptedClaim && acceptedClaim.progress >= 100);
 
   const voterId = accountObj?.id;
   const hasLiked = voterId && Array.isArray(liked_by) ? liked_by.includes(voterId) : false;
@@ -76,18 +74,8 @@ export function ProblemCard({
     }
   };
 
-  const handleCardToggleResolve = async (e) => {
-    e.stopPropagation();
-    if (!onToggleResolve) return;
-    try {
-      await onToggleResolve(id, isResolved ? 'Open' : 'Resolved');
-    } catch (err) {
-      alert(err.message || 'Failed to update problem status.');
-    }
-  };
-
   return (
-    <div className={`problem-card ${isResolved ? 'is-resolved' : ''}`}>
+    <div className={`problem-card ${isCompleted ? 'is-completed' : ''}`}>
       {/* Upvote/Downvote Column - Enforces 1 vote per account */}
       <div className="vote-column">
         <button 
@@ -137,6 +125,18 @@ export function ProblemCard({
             {acceptedClaim ? (
               <>
                 <span className="tag-pill status-accepted-badge">ACCEPTED</span>
+                <span 
+                  className="tag-pill" 
+                  style={{ 
+                    background: 'rgba(59, 130, 246, 0.12)', 
+                    color: '#3b82f6', 
+                    border: '1px solid rgba(59, 130, 246, 0.3)', 
+                    fontWeight: 600, 
+                    fontSize: '0.72rem' 
+                  }}
+                >
+                  TAKEN BY {acceptedClaim.universityName?.toUpperCase()}
+                </span>
                 {currentAccount?.role === 'university' && acceptedClaim.universityId !== currentAccount?.id && (
                   <span 
                     className="tag-pill badge-locked" 
@@ -150,70 +150,42 @@ export function ProblemCard({
                     LOCKED
                   </span>
                 )}
-                {currentAccount?.role === 'industry' && (
-                  <span 
-                    className="tag-pill" 
-                    style={{ 
-                      background: 'rgba(59, 130, 246, 0.12)', 
-                      color: '#3b82f6', 
-                      border: '1px solid rgba(59, 130, 246, 0.3)', 
-                      fontWeight: 600,
-                      fontSize: '0.72rem'
-                    }}
-                  >
-                    TAKEN BY {acceptedClaim.universityName?.toUpperCase()}
-                  </span>
-                )}
               </>
-            ) : isResolved ? (
-              <span className="tag-pill status-resolved-badge">RESOLVED</span>
+            ) : isCompleted ? (
+              <span className="tag-pill status-resolved-badge">COMPLETED</span>
             ) : (
               <>
                 <span className="tag-pill status-open-badge">OPEN</span>
-                {currentAccount?.role === 'industry' && (
-                  <span 
-                    className="tag-pill" 
-                    style={{ 
-                      background: 'rgba(255, 255, 255, 0.04)', 
-                      color: 'var(--text-muted)', 
-                      border: '1px solid var(--border-color)', 
-                      fontSize: '0.72rem'
-                    }}
-                  >
-                    NO UNIVERSITY CLAIMED
-                  </span>
-                )}
+                <span 
+                  className="tag-pill" 
+                  style={{ 
+                    background: 'rgba(255, 255, 255, 0.04)', 
+                    color: 'var(--text-muted)', 
+                    border: '1px solid var(--border-color)', 
+                    fontSize: '0.72rem' 
+                  }}
+                >
+                  AWAITING UNIVERSITY
+                </span>
               </>
             )}
             <span className="tag-pill category-tag">{category || 'General'}</span>
 
             {/* Author Quick Actions */}
-            {isAuthor && (
+            {isAuthor && onDeleteProblem && (
               <div className="card-author-quick-actions" style={{ display: 'flex', gap: '0.35rem' }}>
-                {onToggleResolve && (
-                  <button
-                    type="button"
-                    className={`card-quick-btn ${isResolved ? 'card-reopen-btn' : 'card-resolve-btn'}`}
-                    onClick={handleCardToggleResolve}
-                    title={isResolved ? "Click to reopen this problem" : "Click to mark as resolved"}
-                  >
-                    {isResolved ? 'Reopen' : 'Resolve'}
-                  </button>
-                )}
-                {onDeleteProblem && (
-                  <button
-                    type="button"
-                    className="card-quick-btn card-delete-btn"
-                    onClick={handleCardDelete}
-                    title="Delete your problem"
-                    aria-label="Delete problem"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="card-quick-btn card-delete-btn"
+                  onClick={handleCardDelete}
+                  title="Delete your problem"
+                  aria-label="Delete problem"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
               </div>
             )}
           </div>
@@ -255,7 +227,7 @@ export function ProblemCard({
           <div className="problem-tags-group">
             <span className="tag-pill">ID #{id}</span>
             <span className="tag-pill">Score: {score}</span>
-            {isResolved && <span className="tag-pill resolved-tag">Resolved by Citizen</span>}
+            {isCompleted && <span className="tag-pill resolved-tag">Completed</span>}
             {acceptedClaim?.fundedByIndustry && (
               <span className="tag-pill" style={{ background: 'rgba(129, 140, 248, 0.12)', color: '#818cf8', border: '1px solid rgba(129, 140, 248, 0.3)', fontWeight: 600 }}>
                 Funded by {acceptedClaim.fundedByIndustry.name}

@@ -111,15 +111,6 @@ function CitizenPage() {
     }
   };
 
-  const handleToggleResolve = async (postId, newStatus) => {
-    const updated = await postService.toggleProblemStatus(postId, newStatus, account);
-    if (updated) {
-      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, status: updated.status } : p));
-      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, status: updated.status } : prev));
-    }
-    return updated;
-  };
-
   const handleSubmitSolution = async (postId, solData) => {
     const updated = await postService.submitSolution(postId, solData);
     if (updated) {
@@ -180,7 +171,6 @@ function CitizenPage() {
             onSubmitProblem={handleCreateProblem}
             onUpdateProblem={handleUpdateProblem}
             onDeleteProblem={handleDeleteProblem}
-            onToggleResolve={handleToggleResolve}
           />
         </AuthGuard>
       </main>
@@ -193,7 +183,6 @@ function CitizenPage() {
           onDownvote={handleDownvote}
           onUpdateProblem={handleUpdateProblem}
           onDeleteProblem={handleDeleteProblem}
-          onToggleResolve={handleToggleResolve}
         />
       )}
     </div>

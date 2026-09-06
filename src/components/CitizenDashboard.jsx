@@ -12,7 +12,6 @@ export function CitizenDashboard({
   onSubmitProblem,
   onUpdateProblem,
   onDeleteProblem,
-  onToggleResolve,
   searchQuery: propSearchQuery,
   onSearchChange: propOnSearchChange
 }) {
@@ -172,7 +171,6 @@ export function CitizenDashboard({
                     currentAccountId={currentAccount?.id}
                     currentAccount={currentAccount}
                     onDeleteProblem={onDeleteProblem}
-                    onToggleResolve={onToggleResolve}
                   />
                 ))
               )}

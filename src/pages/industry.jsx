@@ -165,7 +165,6 @@ function IndustryPage() {
               onVote={handleVote}
               onDownvote={handleDownvote}
               onSelectPost={(post) => setSelectedPost(post)}
-              onToggleResolve={handleToggleResolve}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               onOpenWorkspace={handleOpenWorkspace}
@@ -182,7 +181,6 @@ function IndustryPage() {
           onDownvote={handleDownvote}
           onUpdateProblem={handleUpdateProblem}
           onDeleteProblem={handleDeleteProblem}
-          onToggleResolve={handleToggleResolve}
           onFundChallenge={handleFundChallenge}
           onOpenWorkspace={handleOpenWorkspace}
         />

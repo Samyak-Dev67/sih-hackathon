@@ -1,60 +1,77 @@
-import { INITIAL_POSTS, INITIAL_ACCEPTED_CHALLENGES } from '../data/mockData.js';
 import { supabase } from '../utils/supabase.js';
 import { filterProblems } from '../utils/search.js';
 
 /**
  * ==============================================================================
- * DATABASE SCHEMA REFERENCE: `posts`
+ * DATABASE SCHEMA REFERENCE: `posts` (Supabase)
  * ==============================================================================
  * - id: int8 (Primary Key)
  * - created_at: timestamptz (Timestamp with time zone)
- * - title: varchar (Problem title)
- * - desc: varchar (Problem description)
- * - img: varchar (URL / Path to problem image)
- * - category: varchar (Domain category, e.g. Infrastructure, Health, Tech)
- * - score: numeric (Cumulative vote score / likes)
- * - comments: json (Reserved JSON field for discussions)
- * - solutions: json (Array of submitted solutions by universities & industries)
+ * - title: text (Problem title)
+ * - desc: text (Problem description)
+ * - img: text (URL / Path to problem image)
+ * - category: text (Domain category, e.g. Infrastructure, Health, Tech)
+ * - score: numeric (Cumulative vote score)
+ * - comments: _json (Array of discussions and comments)
+ * - updates: _json (Array of solutions, progress updates, and civic milestones)
+ * - user_id: uuid (Author user UUID)
+ * - accepted_by: json (University claim, milestones, progress, and industry funding)
  * ==============================================================================
  */
 
-// ==============================================================================
-// BACKEND API BASE URL PLACEHOLDER
-// Configure VITE_BACKEND_URL in your .env file, or replace this string placeholder.
-// The frontend developer does NOT invent real endpoints. This is a clean placeholder
-// structured for the backend developer to easily plug in their API server.
-// ==============================================================================
-export const BACKEND_API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
-// Examples:
-// 'http://localhost:5000/api'
-// 'https://api.yourdomain.com/v1'
+// Memory and local store synchronization for university claims
+const ACCEPTED_CHALLENGES_KEY = 'fl_accepted_challenges';
+let memoryAcceptedClaims = [];
 
-/**
- * API ENDPOINT ROUTES
- * Centralized mapping of all backend endpoints for the `posts` table and solutions.
- * The backend developer can modify route patterns here without touching UI components.
- */
-export const API_ENDPOINTS = {
-  fetchProblems: '/posts',
-  createProblem: '/posts',
-  likeProblem: (id) => `/posts/${id}/like`,
-  submitSolution: (id) => `/posts/${id}/solutions`,
-  fetchSolutions: (id) => `/posts/${id}/solutions`,
-};
+export function calculateProgress(milestones) {
+  if (!Array.isArray(milestones) || milestones.length === 0) return 0;
+  const completed = milestones.filter(m => m && m.completed).length;
+  return Math.round((completed / milestones.length) * 100);
+}
 
-// Local storage key for fallback simulation (keeps the 2 Lorem Ipsum questions alive)
+export function syncAcceptedClaim(claim) {
+  if (!claim || !claim.postId) return;
+  const postStr = String(claim.postId);
+  const existingIdx = memoryAcceptedClaims.findIndex(c => String(c.postId) === postStr);
+  if (existingIdx >= 0) {
+    memoryAcceptedClaims[existingIdx] = { ...memoryAcceptedClaims[existingIdx], ...claim };
+  } else {
+    memoryAcceptedClaims.push(claim);
+  }
+  try {
+    localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(memoryAcceptedClaims));
+  } catch (e) {}
+}
+
+export function updatePostAcceptedByInSupabase(postId, claim) {
+  if (!supabase || !postId) return;
+  const targetId = !isNaN(Number(postId)) ? Number(postId) : postId;
+  supabase
+    .from('posts')
+    .update({ accepted_by: claim })
+    .eq('id', targetId)
+    .then(({ error }) => {
+      if (error) {
+        console.error('[Supabase UPDATE Error (accepted_by)]:', error.message || error);
+      } else {
+        console.log(`[Supabase UPDATE Success]: Problem #${targetId} accepted_by updated in database.`);
+      }
+    })
+    .catch((err) => {
+      console.error('[Supabase Exception (accepted_by)]:', err);
+    });
+}
+
+// Local storage key for fallback simulation
 const STORAGE_KEY = 'first_look_posts_db';
 
 function getLocalDB() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_POSTS));
-      return INITIAL_POSTS;
-    }
+    if (!raw) return [];
     return JSON.parse(raw);
   } catch (e) {
-    return INITIAL_POSTS;
+    return [];
   }
 }
 
@@ -103,6 +120,66 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 /**
+ * Standardized post object formatter adhering to Supabase posts table schema:
+ * title, desc, img, category, score, comments, updates, user_id, accepted_by.
+ */
+export function formatPostRow(post) {
+  if (!post) return null;
+
+  const postUpdates = Array.isArray(post.updates) ? post.updates : [];
+  const extractedSolutions = postUpdates.filter(u => u && (u.type === 'solution' || u.proposed_approach || u.title));
+  const legacySolutions = Array.isArray(post.solutions)
+    ? post.solutions
+    : Array.isArray(post.solution)
+      ? post.solution
+      : [];
+  const postSols = extractedSolutions.length > 0 ? extractedSolutions : legacySolutions;
+
+  let acceptedClaim = post.accepted_by || null;
+  if (acceptedClaim && typeof acceptedClaim === 'object') {
+    const milestones = Array.isArray(acceptedClaim.milestones) ? acceptedClaim.milestones : [];
+    const progress = typeof acceptedClaim.progress === 'number'
+      ? acceptedClaim.progress
+      : calculateProgress(milestones);
+    acceptedClaim = {
+      ...acceptedClaim,
+      postId: post.id,
+      title: post.title,
+      category: post.category || 'Infrastructure',
+      milestones,
+      progress,
+      status: progress === 100 ? 'Completed' : (acceptedClaim.status || 'In Progress')
+    };
+    syncAcceptedClaim(acceptedClaim);
+  }
+
+  // Extract metadata from comments JSON if present
+  const meta = Array.isArray(post.comments)
+    ? post.comments.find(c => c && typeof c === 'object' && c.__meta)
+    : null;
+
+  const likedBy = Array.isArray(post.liked_by)
+    ? post.liked_by
+    : (Array.isArray(meta?.liked_by) ? meta.liked_by : []);
+
+  const downvotedBy = Array.isArray(post.downvoted_by)
+    ? post.downvoted_by
+    : (Array.isArray(meta?.downvoted_by) ? meta.downvoted_by : []);
+
+  return {
+    ...post,
+    score: Number(post.score) || 0,
+    updates: postUpdates,
+    solutions: postSols,
+    solution: postSols,
+    accepted_by: acceptedClaim,
+    status: acceptedClaim ? acceptedClaim.status : 'Open',
+    liked_by: likedBy,
+    downvoted_by: downvotedBy
+  };
+}
+
+/**
  * 1. Fetch All Posts from Supabase
  * Fetch all posts ordered by creation date.
  * Throws error if Supabase request fails (no silent localStorage fallback).
@@ -110,63 +187,31 @@ async function apiRequest(endpoint, options = {}) {
 export async function getPosts() {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized. Please verify VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  console.log('📡 [Supabase SELECT]: Fetching posts from "posts" table...');
+  console.log('[Supabase SELECT]: Fetching posts from "posts" table...');
   const { data, error } = await supabase
     .from('posts')
     .select('*')
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('❌ [Supabase SELECT Error]:', {
+    console.error('[Supabase SELECT Error]:', {
       message: error.message,
       code: error.code,
       details: error.details,
       hint: error.hint
     });
     if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security policy blocked SELECT on "posts" table. Please configure an RLS SELECT policy in Supabase.');
+      console.error('[RLS / Permission Error]: Row-Level Security policy blocked SELECT on "posts" table. Please configure an RLS SELECT policy in Supabase.');
     }
     throw new Error(`Supabase SELECT failed: ${error.message} (code: ${error.code})`);
   }
 
-  console.log(`✅ [Supabase SELECT Success]: Retrieved ${data ? data.length : 0} posts from Supabase.`);
-  const formatted = (data || []).map(post => {
-    const postSols = Array.isArray(post.solutions)
-      ? post.solutions
-      : Array.isArray(post.solution)
-        ? post.solution
-        : [];
-    const isResolved = post.resolved === true;
-
-    // Extract metadata from comments JSON if present
-    const meta = Array.isArray(post.comments)
-      ? post.comments.find(c => c && typeof c === 'object' && c.__meta)
-      : null;
-
-    const likedBy = Array.isArray(post.liked_by)
-      ? post.liked_by
-      : (Array.isArray(meta?.liked_by) ? meta.liked_by : []);
-
-    const downvotedBy = Array.isArray(post.downvoted_by)
-      ? post.downvoted_by
-      : (Array.isArray(meta?.downvoted_by) ? meta.downvoted_by : []);
-
-    return {
-      ...post,
-      score: Number(post.score) || 0,
-      solutions: postSols,
-      solution: postSols,
-      resolved: isResolved,
-      status: isResolved ? 'Resolved' : 'Open',
-      liked_by: likedBy,
-      downvoted_by: downvotedBy
-    };
-  });
-  return formatted;
+  console.log(`[Supabase SELECT Success]: Retrieved ${data ? data.length : 0} posts from Supabase.`);
+  return (data || []).map(formatPostRow);
 }
 
 /**
@@ -175,11 +220,11 @@ export async function getPosts() {
 export async function getPostById(postId) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  console.log(`📡 [Supabase SELECT]: Fetching post #${postId}...`);
+  console.log(`[Supabase SELECT]: Fetching post #${postId}...`);
   const { data, error } = await supabase
     .from('posts')
     .select('*')
@@ -187,7 +232,7 @@ export async function getPostById(postId) {
     .single();
 
   if (error) {
-    console.error('❌ [Supabase SELECT Error (getPostById)]:', {
+    console.error('[Supabase SELECT Error (getPostById)]:', {
       message: error.message,
       code: error.code,
       details: error.details,
@@ -197,36 +242,7 @@ export async function getPostById(postId) {
   }
 
   if (!data) return null;
-
-  const postSols = Array.isArray(data.solutions)
-    ? data.solutions
-    : Array.isArray(data.solution)
-      ? data.solution
-      : [];
-  const isResolved = data.resolved === true;
-
-  const meta = Array.isArray(data.comments)
-    ? data.comments.find(c => c && typeof c === 'object' && c.__meta)
-    : null;
-
-  const likedBy = Array.isArray(data.liked_by)
-    ? data.liked_by
-    : (Array.isArray(meta?.liked_by) ? meta.liked_by : []);
-
-  const downvotedBy = Array.isArray(data.downvoted_by)
-    ? data.downvoted_by
-    : (Array.isArray(meta?.downvoted_by) ? meta.downvoted_by : []);
-
-  return {
-    ...data,
-    score: Number(data.score) || 0,
-    solutions: postSols,
-    solution: postSols,
-    resolved: isResolved,
-    status: isResolved ? 'Resolved' : 'Open',
-    liked_by: likedBy,
-    downvoted_by: downvotedBy
-  };
+  return formatPostRow(data);
 }
 
 export const getProblems = getPosts;
@@ -375,15 +391,15 @@ export function formatRelativeTime(dateStr) {
  */
 export function getPostStatus(post) {
   if (!post) return 'Open';
-  // 1. Direct boolean column in Supabase
-  if (post.resolved === true) return 'Resolved';
-  if (post.resolved === false) return 'Open';
-  // 2. Direct string status field if present
-  if (post.status === 'Resolved' || post.status === 'Open') return post.status;
-  // 3. Fallback check for comments __meta
+  if (post.accepted_by) {
+    if (post.accepted_by.progress === 100) return 'Completed';
+    return post.accepted_by.status || 'In Progress';
+  }
+  if (post.status === 'Resolved' || post.status === 'Completed') return post.status;
+  if (post.status === 'In Progress' || post.status === 'Open') return post.status;
   if (Array.isArray(post.comments)) {
     const meta = post.comments.find(c => c && typeof c === 'object' && c.__meta);
-    if (meta?.status === 'Resolved') return 'Resolved';
+    if (meta?.status) return meta.status;
   }
   return 'Open';
 }
@@ -466,8 +482,15 @@ export function getPostAuthorInfo(post, currentAccount) {
 export async function createPost(postData = {}) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
+  }
+
+  const cleanTitle = (postData?.title || '').trim();
+  const cleanDesc = (postData?.desc || '').trim();
+
+  if (!cleanTitle || !cleanDesc) {
+    throw new Error('Problem title and description are required.');
   }
 
   // Determine active author info
@@ -487,7 +510,7 @@ export async function createPost(postData = {}) {
     } catch (e) {}
   }
 
-  // Safe metadata inside comments JSON column (safe for DB schema)
+  // Safe metadata inside comments JSON column
   const metaObj = {
     __meta: true,
     author_id: authorId || null,
@@ -501,28 +524,31 @@ export async function createPost(postData = {}) {
   const existingComments = Array.isArray(postData?.comments) ? postData.comments : [];
   const commentsPayload = [metaObj, ...existingComments];
 
+  // Adhere strictly to schema: title, desc, img, category, score, comments, updates, user_id, accepted_by
   const payload = {
-    title: postData?.title ? postData.title.trim() : 'How to optimize database queries',
-    desc: postData?.desc ? postData.desc.trim() : 'A complete guide on indexing and schema design.',
-    img: postData?.img ? postData.img.trim() : '',
-    category: postData?.category ? postData.category.trim() : 'Infrastructure',
+    title: cleanTitle,
+    desc: cleanDesc,
+    img: (postData?.img || '').trim(),
+    category: (postData?.category || 'Infrastructure').trim(),
     score: typeof postData?.score === 'number' ? postData.score : 0,
     comments: commentsPayload,
-    solutions: Array.isArray(postData?.solutions) ? postData.solutions : []
+    updates: Array.isArray(postData?.updates) ? postData.updates : []
   };
 
-  // If authorId is a valid UUID, include user_id
+  if (postData?.accepted_by) {
+    payload.accepted_by = postData.accepted_by;
+  }
+
   if (authorId && isValidUUID(authorId)) {
     payload.user_id = authorId;
   }
 
-  console.log('📡 [Supabase INSERT]: Attempting to insert into "posts" table:', payload);
+  console.log('[Supabase INSERT]: Inserting into "posts" table:', payload);
 
   let currentPayload = { ...payload };
   let data = null;
   let error = null;
 
-  // Resilient retry: if PostgREST returns PGRST204 for a missing column (e.g. 'resolved'), strip it and retry
   for (let attempt = 0; attempt < 3; attempt++) {
     const res = await supabase
       .from('posts')
@@ -540,7 +566,7 @@ export async function createPost(postData = {}) {
       const match = res.error.message.match(/Could not find the '([^']+)' column/i);
       const missingCol = match ? match[1] : null;
       if (missingCol && currentPayload[missingCol] !== undefined) {
-        console.warn(`⚠️ [Supabase Schema Mismatch]: Column '${missingCol}' not found in Supabase 'posts' table. Retrying insert without this column...`);
+        console.warn(`[Supabase Schema Mismatch]: Column '${missingCol}' not found in Supabase 'posts' table. Retrying insert without this column...`);
         delete currentPayload[missingCol];
         continue;
       }
@@ -549,59 +575,55 @@ export async function createPost(postData = {}) {
   }
 
   if (error) {
-    console.error('❌ [Supabase INSERT Error]:', {
+    console.error('[Supabase INSERT Error]:', {
       message: error.message,
       code: error.code,
       details: error.details,
       hint: error.hint
     });
     if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked INSERT into "posts" table (code 42501).');
-      console.error('👉 Fix: Go to Supabase Dashboard > Authentication > Policies, and add an INSERT policy allowing authenticated users.');
+      console.error('[RLS / Permission Error]: Row-Level Security blocked INSERT into "posts" table (code 42501).');
     }
     throw new Error(`Supabase INSERT failed: ${error.message} (code: ${error.code})`);
   }
 
   if (!data || data.length === 0) {
     const err = new Error('Supabase INSERT returned no rows. Check if an RLS SELECT policy is preventing reading the inserted row.');
-    console.warn('⚠️ [Supabase Warning]:', err.message);
+    console.warn('[Supabase Warning]:', err.message);
     throw err;
   }
 
-  console.log('✅ [Supabase INSERT Success]: Row successfully written to "posts" table:', data[0]);
-  return data[0];
+  console.log('[Supabase INSERT Success]: Row successfully written to "posts" table:', data[0]);
+  return formatPostRow(data[0]);
 }
 
 export const createProblem = createPost;
 
 /**
  * 2b. Update an existing Post in Supabase (Author Only)
- * Only updates valid columns in `posts` table: title, desc, category, img, resolved, solutions.
+ * Only updates valid columns in `posts` table: title, desc, category, img, score, comments, updates, accepted_by.
  */
 export async function updatePost(postId, updatedFields = {}) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  console.log(`📡 [Supabase UPDATE]: Updating post #${postId}...`, updatedFields);
+  console.log(`[Supabase UPDATE]: Updating post #${postId}...`, updatedFields);
 
   const targetId = !isNaN(Number(postId)) ? Number(postId) : postId;
 
-  // Extract only columns that exist on `posts` table
+  // Extract only valid columns from `posts` table schema
   const payload = {};
   if (typeof updatedFields.title === 'string') payload.title = updatedFields.title.trim();
   if (typeof updatedFields.desc === 'string') payload.desc = updatedFields.desc.trim();
   if (typeof updatedFields.category === 'string') payload.category = updatedFields.category.trim();
   if (typeof updatedFields.img === 'string') payload.img = updatedFields.img.trim();
   if (typeof updatedFields.score === 'number') payload.score = updatedFields.score;
-  if (typeof updatedFields.resolved === 'boolean') payload.resolved = updatedFields.resolved;
   if (Array.isArray(updatedFields.comments)) payload.comments = updatedFields.comments;
-  if (Array.isArray(updatedFields.solutions)) payload.solutions = updatedFields.solutions;
-  else if (Array.isArray(updatedFields.solution)) payload.solutions = updatedFields.solution;
-  if (Array.isArray(updatedFields.liked_by)) payload.liked_by = updatedFields.liked_by;
-  if (Array.isArray(updatedFields.downvoted_by)) payload.downvoted_by = updatedFields.downvoted_by;
+  if (Array.isArray(updatedFields.updates)) payload.updates = updatedFields.updates;
+  if (updatedFields.accepted_by !== undefined) payload.accepted_by = updatedFields.accepted_by;
 
   let currentPayload = { ...payload };
   let data = null;
@@ -625,7 +647,7 @@ export async function updatePost(postId, updatedFields = {}) {
       const match = res.error.message.match(/Could not find the '([^']+)' column/i);
       const missingCol = match ? match[1] : null;
       if (missingCol && currentPayload[missingCol] !== undefined) {
-        console.warn(`⚠️ [Supabase Schema Mismatch]: Column '${missingCol}' not found in Supabase 'posts' table during update. Retrying update without this column...`);
+        console.warn(`[Supabase Schema Mismatch]: Column '${missingCol}' not found in Supabase 'posts' table during update. Retrying update without this column...`);
         delete currentPayload[missingCol];
         continue;
       }
@@ -634,20 +656,20 @@ export async function updatePost(postId, updatedFields = {}) {
   }
 
   if (error) {
-    console.error('❌ [Supabase UPDATE Error]:', {
+    console.error('[Supabase UPDATE Error]:', {
       message: error.message,
       code: error.code,
       details: error.details,
       hint: error.hint
     });
     if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501). Check RLS UPDATE policy in Supabase.');
+      console.error('[RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501). Check RLS UPDATE policy in Supabase.');
     }
     throw new Error(`Supabase UPDATE failed: ${error.message} (code: ${error.code})`);
   }
 
-  console.log(`✅ [Supabase UPDATE Success]: Post #${postId} updated successfully:`, data && data[0]);
-  return data && data.length > 0 ? data[0] : { id: postId, ...payload };
+  console.log(`[Supabase UPDATE Success]: Post #${postId} updated successfully:`, data && data[0]);
+  return formatPostRow(data && data.length > 0 ? data[0] : { id: postId, ...payload });
 }
 
 export const updateProblem = updatePost;
@@ -1205,7 +1227,7 @@ export async function downvoteProblem(postId, accountId = 'default-account') {
 export async function submitSolution(postId, { title, desc, proposed_approach, author_id, author_email, author_name, author_role }) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
@@ -1231,11 +1253,12 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
   if (!resolvedAuthorName) resolvedAuthorName = 'Academic / Enterprise Partner';
 
   const solutionPayload = {
+    type: 'solution',
     problem_id: postId,
     id: `sol-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    title: title.trim(),
-    desc: desc.trim(),
-    proposed_approach: (proposed_approach || desc).trim(),
+    title: (title || '').trim(),
+    desc: (desc || '').trim(),
+    proposed_approach: (proposed_approach || desc || '').trim(),
     author_id: resolvedAuthorId,
     author_email: resolvedAuthorEmail,
     author_name: resolvedAuthorName,
@@ -1243,7 +1266,7 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
     created_at: new Date().toISOString()
   };
 
-  console.log(`📡 [Supabase UPDATE]: Submitting solution for post #${postId}...`, solutionPayload);
+  console.log(`[Supabase UPDATE]: Submitting solution for post #${postId}...`, solutionPayload);
 
   // 1. Fetch current post from Supabase
   const { data: post, error: fetchErr } = await supabase
@@ -1253,95 +1276,45 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
     .single();
 
   if (fetchErr) {
-    console.error('❌ [Supabase SELECT Error (submitSolution)]:', fetchErr);
+    console.error('[Supabase SELECT Error (submitSolution)]:', fetchErr);
     throw new Error(`Failed to fetch post #${postId} before saving solution: ${fetchErr.message}`);
   }
 
-  const existingSolutions = Array.isArray(post.solutions)
-    ? post.solutions
-    : Array.isArray(post.solution)
-      ? post.solution
-      : [];
-
-  const updatedSolutions = [
+  const existingUpdates = Array.isArray(post.updates) ? post.updates : [];
+  const updatedUpdates = [
     solutionPayload,
-    ...existingSolutions.filter(s => s.id !== solutionPayload.id)
+    ...existingUpdates.filter(s => s && s.id !== solutionPayload.id)
   ];
 
-  // 2. Update solutions directly in Supabase
-  let updateResult = null;
-  let updateError = null;
-
-  const { data: dataSolutions, error: errorSolutions } = await supabase
+  // 2. Update updates column in Supabase
+  const { data: updateResult, error: updateError } = await supabase
     .from('posts')
-    .update({ solutions: updatedSolutions })
+    .update({ updates: updatedUpdates })
     .eq('id', postId)
     .select();
 
-  if (errorSolutions) {
-    // If backend column is named 'solution', fallback to 'solution'
-    if (errorSolutions.message?.includes('solution') || errorSolutions.code === 'PGRST204') {
-      console.log('🔄 Attempting fallback to "solution" column...');
-      const { data: dataSolution, error: errorSolution } = await supabase
-        .from('posts')
-        .update({ solution: updatedSolutions })
-        .eq('id', postId)
-        .select();
-
-      if (errorSolution) {
-        updateError = errorSolution;
-      } else {
-        updateResult = dataSolution;
-      }
-    } else {
-      updateError = errorSolutions;
-    }
-  } else {
-    updateResult = dataSolutions;
-  }
-
   if (updateError) {
-    console.error('❌ [Supabase UPDATE Error (submitSolution)]:', {
-      message: updateError.message,
-      code: updateError.code,
-      details: updateError.details,
-      hint: updateError.hint
-    });
+    console.error('[Supabase UPDATE Error (submitSolution)]:', updateError);
     if (updateError.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts.solutions".');
-      console.error('👉 Fix: Go to Supabase Dashboard > Authentication > Policies, and add an UPDATE policy allowing users to submit solutions.');
+      console.error('[RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts.updates".');
     }
     throw new Error(`Supabase failed to save solution: ${updateError.message} (code: ${updateError.code})`);
   }
 
-  if (!updateResult || updateResult.length === 0) {
-    const rlsErr = new Error('Supabase UPDATE returned 0 rows. Row-Level Security (RLS) on the "posts" table may have blocked updating this problem.');
-    console.error('🚨 [Supabase RLS Error]:', rlsErr.message);
-    throw rlsErr;
-  }
-
-  const savedRecord = updateResult[0];
-  const isResolved = savedRecord.resolved === true;
-  const finalPost = {
-    ...savedRecord,
-    solutions: updatedSolutions,
-    solution: updatedSolutions,
-    resolved: isResolved,
-    status: isResolved ? 'Resolved' : 'Open'
-  };
-
-  console.log(`✅ [Supabase UPDATE Success]: Solution saved to post #${postId} in Supabase:`, finalPost);
-  return finalPost;
+  const savedRecord = updateResult && updateResult.length > 0 ? updateResult[0] : post;
+  const formatted = formatPostRow(savedRecord);
+  console.log(`[Supabase UPDATE Success]: Solution saved to post #${postId} in Supabase:`, formatted);
+  return formatted;
 }
 
 /**
  * 4c. Delete a Solution from Supabase (Solution Author Only)
- * Removes a specific solution by id from the solutions JSON column.
+ * Removes a specific solution by id from the updates JSON column.
  */
 export async function deleteSolution(postId, solutionId, currentAccount) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
@@ -1349,7 +1322,7 @@ export async function deleteSolution(postId, solutionId, currentAccount) {
     throw new Error('Problem ID and Solution ID are required to delete a solution.');
   }
 
-  console.log(`📡 [Supabase UPDATE]: Deleting solution #${solutionId} from post #${postId}...`);
+  console.log(`[Supabase UPDATE]: Deleting solution #${solutionId} from post #${postId}...`);
 
   // 1. Fetch current post from Supabase
   const { data: post, error: fetchErr } = await supabase
@@ -1359,84 +1332,46 @@ export async function deleteSolution(postId, solutionId, currentAccount) {
     .single();
 
   if (fetchErr) {
-    console.error('❌ [Supabase SELECT Error (deleteSolution)]:', fetchErr);
+    console.error('[Supabase SELECT Error (deleteSolution)]:', fetchErr);
     throw new Error(`Failed to fetch problem #${postId}: ${fetchErr.message}`);
   }
 
-  const existingSolutions = Array.isArray(post.solutions)
-    ? post.solutions
-    : Array.isArray(post.solution)
-      ? post.solution
-      : [];
+  const existingUpdates = Array.isArray(post.updates) ? post.updates : [];
+  const targetSolution = existingUpdates.find(s => s && s.id === solutionId);
 
-  const targetSolution = existingSolutions.find(s => s.id === solutionId);
   if (!targetSolution) {
-    console.warn(`⚠️ Solution #${solutionId} not found in post #${postId}.`);
-    return {
-      ...post,
-      solutions: existingSolutions,
-      solution: existingSolutions,
-      resolved: post.resolved === true,
-      status: post.resolved === true ? 'Resolved' : 'Open'
-    };
+    console.warn(`Solution #${solutionId} not found in post #${postId}.`);
+    return formatPostRow(post);
   }
 
   // Verify ownership
   if (currentAccount && !isSolutionAuthor(targetSolution, currentAccount)) {
     const err = new Error('Unauthorized: You can only delete solutions that you have posted.');
-    console.error('❌ [Auth Error]:', err.message);
+    console.error('[Auth Error]:', err.message);
     throw err;
   }
 
-  const updatedSolutions = existingSolutions.filter(s => s.id !== solutionId);
+  const updatedUpdates = existingUpdates.filter(s => s && s.id !== solutionId);
 
-  // 2. Update solutions in Supabase
-  let updateResult = null;
-  let updateError = null;
-
-  const { data: dataSolutions, error: errorSolutions } = await supabase
+  // 2. Update updates in Supabase
+  const { data: updateResult, error: updateError } = await supabase
     .from('posts')
-    .update({ solutions: updatedSolutions })
+    .update({ updates: updatedUpdates })
     .eq('id', postId)
     .select();
 
-  if (errorSolutions) {
-    if (errorSolutions.message?.includes('solution') || errorSolutions.code === 'PGRST204') {
-      const { data: dataSolution, error: errorSolution } = await supabase
-        .from('posts')
-        .update({ solution: updatedSolutions })
-        .eq('id', postId)
-        .select();
-
-      if (errorSolution) updateError = errorSolution;
-      else updateResult = dataSolution;
-    } else {
-      updateError = errorSolutions;
-    }
-  } else {
-    updateResult = dataSolutions;
-  }
-
   if (updateError) {
-    console.error('❌ [Supabase UPDATE Error (deleteSolution)]:', updateError);
+    console.error('[Supabase UPDATE Error (deleteSolution)]:', updateError);
     if (updateError.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked deleting solution on "posts.solutions".');
+      console.error('[RLS / Permission Error]: Row-Level Security blocked deleting solution on "posts.updates".');
     }
     throw new Error(`Supabase failed to delete solution: ${updateError.message} (code: ${updateError.code})`);
   }
 
   const savedRecord = updateResult && updateResult.length > 0 ? updateResult[0] : post;
-  const isResolved = savedRecord.resolved === true;
-  const finalPost = {
-    ...savedRecord,
-    solutions: updatedSolutions,
-    solution: updatedSolutions,
-    resolved: isResolved,
-    status: isResolved ? 'Resolved' : 'Open'
-  };
-
-  console.log(`✅ [Supabase UPDATE Success]: Solution #${solutionId} successfully deleted from post #${postId}:`, finalPost);
-  return finalPost;
+  const formatted = formatPostRow(savedRecord);
+  console.log(`[Supabase UPDATE Success]: Solution #${solutionId} successfully deleted from post #${postId}:`, formatted);
+  return formatted;
 }
 
 /**
@@ -1508,29 +1443,28 @@ export async function toggleProblemStatus(postId, targetStatus, currentAccount) 
   }
 
   if (error) {
-    console.error('❌ [Supabase UPDATE Error (toggleProblemStatus)]:', {
+    console.error('[Supabase UPDATE Error (toggleProblemStatus)]:', {
       message: error.message,
       code: error.code,
       details: error.details,
       hint: error.hint
     });
     if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts.resolved" (code 42501).');
-      console.error('👉 Fix: Go to Supabase Dashboard > Authentication > Policies, and verify UPDATE policy on "posts".');
+      console.error('[RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501).');
     }
     throw new Error(`Supabase UPDATE failed for resolved status: ${error.message} (code: ${error.code})`);
   }
 
   if (!data || data.length === 0) {
     const rlsErr = new Error('Supabase UPDATE returned 0 rows for resolved status. RLS may have blocked updating this problem.');
-    console.error('🚨 [Supabase RLS Error]:', rlsErr.message);
+    console.error('[Supabase RLS Error]:', rlsErr.message);
     throw rlsErr;
   }
 
   const updatedRecord = data[0];
   const finalStatus = newResolvedBool ? 'Resolved' : 'Open';
 
-  console.log(`✅ [Supabase UPDATE Success]: Post #${postId} resolved is now ${newResolvedBool} ("${finalStatus}")`);
+  console.log(`[Supabase UPDATE Success]: Post #${postId} status is now "${finalStatus}"`);
   return {
     ...updatedRecord,
     resolved: newResolvedBool,
@@ -1547,7 +1481,7 @@ export const reopenProblem = (postId, account) => toggleProblemStatus(postId, 'O
 export async function getSolutions(postId) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
@@ -1558,7 +1492,7 @@ export async function getSolutions(postId) {
     .single();
 
   if (error) {
-    console.error('❌ [Supabase SELECT Error (getSolutions)]:', error);
+    console.error('[Supabase SELECT Error (getSolutions)]:', error);
     throw new Error(`Supabase getSolutions failed: ${error.message}`);
   }
 
@@ -1576,47 +1510,48 @@ export async function getSolutions(postId) {
  * UNIVERSITY WORKSPACE & ACCEPTED CHALLENGES SERVICE
  * ==============================================================================
  */
-const ACCEPTED_CHALLENGES_KEY = 'fl_accepted_challenges';
 
 export function getAcceptedChallenges(universityId = null) {
   try {
     const raw = localStorage.getItem(ACCEPTED_CHALLENGES_KEY);
-    let list = raw ? JSON.parse(raw) : INITIAL_ACCEPTED_CHALLENGES;
+    let list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) list = [];
+
     // Purge legacy sample challenges ('ac-1', 'ac-2') if previously saved in browser localStorage
-    if (Array.isArray(list) && list.some(c => c.id === 'ac-1' || c.id === 'ac-2')) {
-      list = list.filter(c => c.id !== 'ac-1' && c.id !== 'ac-2');
+    if (list.some(c => c && (c.id === 'ac-1' || c.id === 'ac-2'))) {
+      list = list.filter(c => c && c.id !== 'ac-1' && c.id !== 'ac-2');
       localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(list));
     }
-    if (!raw) {
-      localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(INITIAL_ACCEPTED_CHALLENGES));
-    }
+
+    // Merge in-memory claims
+    memoryAcceptedClaims.forEach(c => {
+      if (c && c.postId && !list.some(item => item && String(item.postId) === String(c.postId))) {
+        list.push(c);
+      }
+    });
+
     if (universityId) {
-      return list.filter(c => c.universityId === universityId);
+      return list.filter(c => c && String(c.universityId) === String(universityId));
     }
     return list;
   } catch (e) {
-    return INITIAL_ACCEPTED_CHALLENGES;
+    return memoryAcceptedClaims;
   }
 }
 
 export function saveAcceptedChallenges(list) {
   try {
-    localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(list));
+    memoryAcceptedClaims = Array.isArray(list) ? list : [];
+    localStorage.setItem(ACCEPTED_CHALLENGES_KEY, JSON.stringify(memoryAcceptedClaims));
   } catch (e) {
     console.error('Failed to save accepted challenges:', e);
   }
 }
 
-export function calculateProgress(milestones) {
-  if (!Array.isArray(milestones) || milestones.length === 0) return 0;
-  const completed = milestones.filter(m => m.completed).length;
-  return Math.round((completed / milestones.length) * 100);
-}
-
 export function acceptChallenge(post, universityAccount) {
   if (!post || !universityAccount) return null;
   const list = getAcceptedChallenges();
-  const existing = list.find(c => String(c.postId) === String(post.id));
+  const existing = list.find(c => c && String(c.postId) === String(post.id));
   if (existing) {
     if (existing.universityId === universityAccount.id) {
       return existing;
@@ -1627,8 +1562,8 @@ export function acceptChallenge(post, universityAccount) {
   }
 
   const initialMilestones = [
-    { id: `m-${Date.now()}-1`, title: 'Phase 1: Field Investigation & Scope Definition', deadline: 'Jan 30, 2027', completed: false },
-    { id: `m-${Date.now()}-2`, title: 'Phase 2: Prototype Development & Testing', deadline: 'Mar 15, 2027', completed: false }
+    { id: `m-${Date.now()}-1`, title: 'Phase 1: Field Investigation and Scope Definition', deadline: 'Jan 30, 2027', completed: false },
+    { id: `m-${Date.now()}-2`, title: 'Phase 2: Prototype Development and Testing', deadline: 'Mar 15, 2027', completed: false }
   ];
 
   const newClaim = {
@@ -1645,20 +1580,26 @@ export function acceptChallenge(post, universityAccount) {
     universityId: universityAccount.id,
     universityName: universityAccount.name || 'University Research Lab',
     fundedByIndustry: null,
+    empoweredBy: [],
     status: 'In Progress',
     acceptedAt: new Date().toISOString()
   };
 
-  const updated = [newClaim, ...list];
+  const updated = [newClaim, ...list.filter(c => c && String(c.postId) !== String(post.id))];
   saveAcceptedChallenges(updated);
+
+  // Direct persistence to Supabase posts.accepted_by column
+  updatePostAcceptedByInSupabase(post.id, newClaim);
+
   return newClaim;
 }
 
 export function addMilestone(postId, milestoneData) {
   if (!postId || !milestoneData || !milestoneData.title?.trim()) return null;
   const list = getAcceptedChallenges();
+  let updatedTarget = null;
   const updated = list.map(c => {
-    if (String(c.postId) === String(postId)) {
+    if (c && String(c.postId) === String(postId)) {
       const currentMilestones = c.milestones || [];
       const newM = {
         id: `m-${Date.now()}`,
@@ -1667,27 +1608,34 @@ export function addMilestone(postId, milestoneData) {
         completed: false
       };
       const newMilestones = [...currentMilestones, newM];
-      return {
+      updatedTarget = {
         ...c,
         milestones: newMilestones,
         progress: calculateProgress(newMilestones),
         milestoneDeadline: milestoneData.deadline || c.milestoneDeadline
       };
+      return updatedTarget;
     }
     return c;
   });
+
   saveAcceptedChallenges(updated);
-  return updated.find(c => String(c.postId) === String(postId));
+  if (updatedTarget) {
+    updatePostAcceptedByInSupabase(postId, updatedTarget);
+    return updatedTarget;
+  }
+  return null;
 }
 
 export function toggleMilestone(postId, milestoneId) {
   if (!postId || !milestoneId) return null;
   const list = getAcceptedChallenges();
+  let updatedTarget = null;
   const updated = list.map(c => {
-    if (String(c.postId) === String(postId)) {
+    if (c && String(c.postId) === String(postId)) {
       const currentMilestones = c.milestones || [];
       const newMilestones = currentMilestones.map(m => {
-        if (m.id === milestoneId) {
+        if (m && m.id === milestoneId) {
           const nextCompleted = !m.completed;
           let updatedFunding = m.funding;
           if (updatedFunding) {
@@ -1701,47 +1649,60 @@ export function toggleMilestone(postId, milestoneId) {
         }
         return m;
       });
-      return {
+      updatedTarget = {
         ...c,
         milestones: newMilestones,
         progress: calculateProgress(newMilestones)
       };
+      return updatedTarget;
     }
     return c;
   });
+
   saveAcceptedChallenges(updated);
-  return updated.find(c => String(c.postId) === String(postId));
+  if (updatedTarget) {
+    updatePostAcceptedByInSupabase(postId, updatedTarget);
+    return updatedTarget;
+  }
+  return null;
 }
 
 export function deleteMilestone(postId, milestoneId) {
   if (!postId || !milestoneId) return null;
   const list = getAcceptedChallenges();
+  let updatedTarget = null;
   const updated = list.map(c => {
-    if (String(c.postId) === String(postId)) {
+    if (c && String(c.postId) === String(postId)) {
       const currentMilestones = c.milestones || [];
-      const newMilestones = currentMilestones.filter(m => m.id !== milestoneId);
-      return {
+      const newMilestones = currentMilestones.filter(m => m && m.id !== milestoneId);
+      updatedTarget = {
         ...c,
         milestones: newMilestones,
         progress: calculateProgress(newMilestones)
       };
+      return updatedTarget;
     }
     return c;
   });
+
   saveAcceptedChallenges(updated);
-  return updated.find(c => String(c.postId) === String(postId));
+  if (updatedTarget) {
+    updatePostAcceptedByInSupabase(postId, updatedTarget);
+    return updatedTarget;
+  }
+  return null;
 }
 
 export function isProblemLocked(postId) {
   if (!postId) return false;
   const list = getAcceptedChallenges();
-  return list.some(c => String(c.postId) === String(postId));
+  return list.some(c => c && String(c.postId) === String(postId));
 }
 
 export function getProblemLockInfo(postId) {
   if (!postId) return null;
   const list = getAcceptedChallenges();
-  const claim = list.find(c => String(c.postId) === String(postId));
+  const claim = list.find(c => c && String(c.postId) === String(postId));
   if (!claim) return null;
   return {
     isLocked: true,
@@ -1755,7 +1716,7 @@ export function getProblemLockInfo(postId) {
 export function isProblemAcceptedByOtherUniversity(postId, currentUniversityId) {
   if (!postId) return false;
   const list = getAcceptedChallenges();
-  const claim = list.find(c => String(c.postId) === String(postId));
+  const claim = list.find(c => c && String(c.postId) === String(postId));
   if (!claim) return false;
   return Boolean(currentUniversityId && claim.universityId !== currentUniversityId);
 }
@@ -1768,10 +1729,11 @@ export function fundChallenge(postId, industryAccount) {
 export function empowerChallenge(postId, industryAccount) {
   if (!postId || !industryAccount) return null;
   const list = getAcceptedChallenges();
+  let updatedTarget = null;
   const updated = list.map(c => {
-    if (String(c.postId) === String(postId)) {
+    if (c && String(c.postId) === String(postId)) {
       const empoweredByList = Array.isArray(c.empoweredBy) ? c.empoweredBy : [];
-      const alreadyIn = empoweredByList.some(e => e.id === industryAccount.id);
+      const alreadyIn = empoweredByList.some(e => e && e.id === industryAccount.id);
       const newEmpoweredBy = alreadyIn 
         ? empoweredByList 
         : [...empoweredByList, {
@@ -1786,16 +1748,22 @@ export function empowerChallenge(postId, industryAccount) {
         fundedAt: new Date().toISOString()
       };
 
-      return {
+      updatedTarget = {
         ...c,
         empoweredBy: newEmpoweredBy,
         fundedByIndustry: fundedObj
       };
+      return updatedTarget;
     }
     return c;
   });
+
   saveAcceptedChallenges(updated);
-  return updated.find(c => String(c.postId) === String(postId));
+  if (updatedTarget) {
+    updatePostAcceptedByInSupabase(postId, updatedTarget);
+    return updatedTarget;
+  }
+  return null;
 }
 
 export function fundMilestone(postId, milestoneId, amountInRupees, industryAccount) {
@@ -1806,11 +1774,12 @@ export function fundMilestone(postId, milestoneId, amountInRupees, industryAccou
   }
 
   const list = getAcceptedChallenges();
+  let updatedTarget = null;
   const updated = list.map(c => {
-    if (String(c.postId) === String(postId)) {
+    if (c && String(c.postId) === String(postId)) {
       const currentMilestones = c.milestones || [];
       const newMilestones = currentMilestones.map(m => {
-        if (m.id === milestoneId) {
+        if (m && m.id === milestoneId) {
           const isComp = Boolean(m.completed);
           return {
             ...m,
@@ -1829,7 +1798,7 @@ export function fundMilestone(postId, milestoneId, amountInRupees, industryAccou
       });
 
       const empoweredByList = Array.isArray(c.empoweredBy) ? c.empoweredBy : [];
-      const alreadyIn = empoweredByList.some(e => e.id === industryAccount.id);
+      const alreadyIn = empoweredByList.some(e => e && e.id === industryAccount.id);
       const newEmpoweredBy = alreadyIn
         ? empoweredByList
         : [...empoweredByList, {
@@ -1838,7 +1807,7 @@ export function fundMilestone(postId, milestoneId, amountInRupees, industryAccou
             empoweredAt: new Date().toISOString()
           }];
 
-      return {
+      updatedTarget = {
         ...c,
         milestones: newMilestones,
         empoweredBy: newEmpoweredBy,
@@ -1848,25 +1817,31 @@ export function fundMilestone(postId, milestoneId, amountInRupees, industryAccou
           fundedAt: new Date().toISOString()
         }
       };
+      return updatedTarget;
     }
     return c;
   });
 
   saveAcceptedChallenges(updated);
-  return updated.find(c => String(c.postId) === String(postId));
+  if (updatedTarget) {
+    updatePostAcceptedByInSupabase(postId, updatedTarget);
+    return updatedTarget;
+  }
+  return null;
 }
 
 export function getIndustrySupportedChallenges(industryId = null) {
   const list = getAcceptedChallenges();
   if (!industryId) return list;
   return list.filter(c => {
-    if (Array.isArray(c.empoweredBy) && c.empoweredBy.some(e => e.id === industryId)) {
+    if (!c) return false;
+    if (Array.isArray(c.empoweredBy) && c.empoweredBy.some(e => e && e.id === industryId)) {
       return true;
     }
     if (c.fundedByIndustry && (c.fundedByIndustry.id === industryId || (industryId === 'ind-1' && c.fundedByIndustry.id === 'ind-1'))) {
       return true;
     }
-    if (Array.isArray(c.milestones) && c.milestones.some(m => m.funding && (m.funding.industryId === industryId || (industryId === 'ind-1' && m.funding.industryId === 'ind-1')))) {
+    if (Array.isArray(c.milestones) && c.milestones.some(m => m && m.funding && (m.funding.industryId === industryId || (industryId === 'ind-1' && m.funding.industryId === 'ind-1')))) {
       return true;
     }
     return false;
@@ -1876,7 +1851,7 @@ export function getIndustrySupportedChallenges(industryId = null) {
 export function canAccessWorkspace(postId, account) {
   if (!postId || !account) return false;
   const list = getAcceptedChallenges();
-  const claim = list.find(c => String(c.postId) === String(postId));
+  const claim = list.find(c => c && String(c.postId) === String(postId));
   if (!claim) return false;
 
   // University check: Only the university that accepted it
@@ -1893,8 +1868,9 @@ export function canAccessWorkspace(postId, account) {
 }
 
 export function getChallengeWorkspace(postId) {
+  if (!postId) return null;
   const list = getAcceptedChallenges();
-  return list.find(c => String(c.postId) === String(postId)) || null;
+  return list.find(c => c && String(c.postId) === String(postId)) || null;
 }
 
 /**
@@ -2110,18 +2086,18 @@ export function isTeamOwnedByUniversity(team, universityId) {
 export async function fetchUniversityTeams(universityId = null) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  console.log(`📡 [Supabase SELECT]: Fetching research teams from "teams" table for university "${universityId}"...`);
+  console.log(`[Supabase SELECT]: Fetching research teams from "teams" table for university "${universityId}"...`);
   const { data, error } = await supabase
     .from('teams')
     .select('*')
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('❌ [Supabase SELECT Error (teams)]:', {
+    console.error('[Supabase SELECT Error (teams)]:', {
       message: error.message,
       code: error.code,
       details: error.details,
@@ -2239,14 +2215,14 @@ export async function createUniversityTeam(universityId, teamData) {
     members: membersMeta
   };
 
-  console.log('📡 [Supabase INSERT]: Adding new team to "teams" table for university:', universityId, payload);
+  console.log('[Supabase INSERT]: Adding new team to "teams" table for university:', universityId, payload);
   const { data, error } = await supabase
     .from('teams')
     .insert([payload])
     .select();
 
   if (error) {
-    console.error('❌ [Supabase INSERT Error (teams)]:', error);
+    console.error('[Supabase INSERT Error (teams)]:', error);
     if (error.code === '42501') {
       throw new Error(`Row Level Security (RLS) blocked inserting into "teams" table (code: 42501). Add an INSERT policy for authenticated/public users in Supabase.`);
     }
@@ -2332,7 +2308,7 @@ export async function updateUniversityTeam(universityId, teamId, teamData) {
   }
 
   const targetId = !isNaN(Number(teamId)) ? Number(teamId) : teamId;
-  console.log(`📡 [Supabase UPDATE]: Updating team #${targetId} in "teams" table:`, payload);
+  console.log(`[Supabase UPDATE]: Updating team #${targetId} in "teams" table:`, payload);
 
   const { data, error } = await supabase
     .from('teams')
@@ -2341,7 +2317,7 @@ export async function updateUniversityTeam(universityId, teamId, teamData) {
     .select();
 
   if (error) {
-    console.error('❌ [Supabase UPDATE Error (teams)]:', error);
+    console.error('[Supabase UPDATE Error (teams)]:', error);
     if (error.code === '42501') {
       throw new Error(`Row Level Security (RLS) blocked updating "teams" table (code: 42501). Check UPDATE policy on "teams" in Supabase.`);
     }
@@ -2373,7 +2349,7 @@ export async function deleteUniversityTeam(universityId, teamId) {
   }
 
   const targetId = !isNaN(Number(teamId)) ? Number(teamId) : teamId;
-  console.log(`📡 [Supabase DELETE]: Deleting team #${targetId} from "teams" table...`);
+  console.log(`[Supabase DELETE]: Deleting team #${targetId} from "teams" table...`);
 
   const { data, error } = await supabase
     .from('teams')
@@ -2381,7 +2357,7 @@ export async function deleteUniversityTeam(universityId, teamId) {
     .eq('id', targetId);
 
   if (error) {
-    console.error('❌ [Supabase DELETE Error (teams)]:', error);
+    console.error('[Supabase DELETE Error (teams)]:', error);
     if (error.code === '42501') {
       throw new Error(`Row Level Security (RLS) blocked deleting from "teams" table (code: 42501). Check DELETE policy on "teams" in Supabase.`);
     }

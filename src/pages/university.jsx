@@ -166,7 +166,6 @@ function UniversityPage() {
               onVote={handleVote}
               onDownvote={handleDownvote}
               onSelectPost={(post) => setSelectedPost(post)}
-              onToggleResolve={handleToggleResolve}
               onOpenWorkspace={handleOpenWorkspace}
               onAcceptChallenge={handleAcceptChallenge}
             />
@@ -182,7 +181,6 @@ function UniversityPage() {
           onDownvote={handleDownvote}
           onUpdateProblem={handleUpdateProblem}
           onDeleteProblem={handleDeleteProblem}
-          onToggleResolve={handleToggleResolve}
           onAcceptChallenge={handleAcceptChallenge}
           onOpenWorkspace={handleOpenWorkspace}
         />

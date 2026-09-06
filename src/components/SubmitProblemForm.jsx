@@ -59,7 +59,7 @@ export function SubmitProblemForm({ onSubmitProblem, onCancel }) {
               type="text"
               required
               className="field-input"
-              placeholder="Enter a clear problem title (e.g., Lorem ipsum dolor sit amet)"
+              placeholder="Enter a clear problem title..."
               value={title}
               onChange={(e) => { setTitle(e.target.value); setErrorMsg(''); }}
             />

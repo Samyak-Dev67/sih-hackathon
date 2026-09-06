@@ -17,7 +17,6 @@ export function ProblemDetailModal({
   onDownvote,
   onUpdateProblem,
   onDeleteProblem,
-  onToggleResolve,
   onOpenAuth,
   onAcceptChallenge,
   onFundChallenge,
@@ -37,13 +36,14 @@ export function ProblemDetailModal({
     downvoted_by = []
   } = post;
 
-  const acceptedClaim = getChallengeWorkspace(id);
+  const acceptedClaim = post.accepted_by || getChallengeWorkspace(id);
 
   const isGuest = !currentAccount;
   const userRole = currentAccount?.role || (isGuest ? 'guest' : 'citizen');
   const voterId = currentAccount?.id;
   const hasLiked = voterId && Array.isArray(liked_by) ? liked_by.includes(voterId) : false;
   const hasDownvoted = voterId && Array.isArray(downvoted_by) ? downvoted_by.includes(voterId) : false;
+
   const [isVoting, setIsVoting] = useState(false);
 
   const handleModalVote = async (direction) => {
@@ -73,7 +73,6 @@ export function ProblemDetailModal({
 
   // Status state
   const [currentStatus, setCurrentStatus] = useState(() => getPostStatus(post));
-  const [resolving, setResolving] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
 
   // Edit Problem state
@@ -149,22 +148,6 @@ export function ProblemDetailModal({
     if (file) {
       setEditImageFile(file);
       setEditImagePreview(URL.createObjectURL(file));
-    }
-  };
-
-  const handleToggleResolve = async () => {
-    if (!onToggleResolve) return;
-    setResolving(true);
-    try {
-      const newStatus = currentStatus === 'Resolved' ? 'Open' : 'Resolved';
-      await onToggleResolve(id, newStatus);
-      setCurrentStatus(newStatus);
-      setFeedbackMsg(`Problem marked as ${newStatus}!`);
-      setTimeout(() => setFeedbackMsg(''), 4000);
-    } catch (err) {
-      setFeedbackMsg(err.message || 'Failed to update problem status.');
-    } finally {
-      setResolving(false);
     }
   };
 
@@ -254,8 +237,8 @@ export function ProblemDetailModal({
                 )}
               </>
             ) : (
-              <span className={`tag-pill ${currentStatus === 'Resolved' ? 'status-resolved-badge' : 'status-open-badge'}`}>
-                {currentStatus.toUpperCase()}
+              <span className={`tag-pill ${currentStatus === 'Resolved' || currentStatus === 'Completed' ? 'status-resolved-badge' : 'status-open-badge'}`}>
+                {currentStatus === 'Resolved' ? 'COMPLETED' : currentStatus.toUpperCase()}
               </span>
             )}
             <span className="tag-pill category-tag">{category || 'General'}</span>
@@ -321,17 +304,6 @@ export function ProblemDetailModal({
                   >
                     Delete
                   </button>
-                  {onToggleResolve && (
-                    <button
-                      type="button"
-                      className={`btn ${currentStatus === 'Resolved' ? 'btn-outline' : 'btn-blue'}`}
-                      onClick={handleToggleResolve}
-                      disabled={resolving}
-                      style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
-                    >
-                      {resolving ? 'Updating...' : currentStatus === 'Resolved' ? 'Reopen Problem' : 'Mark Resolved'}
-                    </button>
-                  )}
                 </div>
               )}
             </div>
@@ -503,6 +475,68 @@ export function ProblemDetailModal({
                   </div>
                 )}
 
+                {/* Citizen / Public University Adoption & Progress Card */}
+                {(userRole === 'citizen' || isGuest) && (
+                  <div className={`citizen-claim-status-card ${acceptedClaim ? 'is-claimed' : 'is-unclaimed'}`} style={{
+                    margin: '1rem 0',
+                    padding: '1rem 1.15rem',
+                    borderRadius: '10px',
+                    background: acceptedClaim ? 'rgba(59, 130, 246, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                    border: acceptedClaim ? '1px solid rgba(59, 130, 246, 0.25)' : '1px solid var(--border-color)'
+                  }}>
+                    {acceptedClaim ? (
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.65rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span className="tag-pill status-accepted-badge">ACCEPTED BY UNIVERSITY</span>
+                            <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--accent-blue, #3b82f6)' }}>
+                              {acceptedClaim.universityName}
+                            </span>
+                          </div>
+                          <span className="tag-pill category-tag" style={{ fontWeight: 700 }}>
+                            {acceptedClaim.progress || 0}% Progress
+                          </span>
+                        </div>
+
+                        {/* Animated Progress Bar */}
+                        <div style={{ width: '100%', height: '8px', background: 'rgba(255, 255, 255, 0.1)', borderRadius: '999px', overflow: 'hidden', marginBottom: '0.65rem' }}>
+                          <div 
+                            style={{ 
+                              width: `${Math.min(acceptedClaim.progress || 0, 100)}%`, 
+                              height: '100%', 
+                              background: 'var(--accent-blue, #3b82f6)', 
+                              borderRadius: '999px',
+                              transition: 'width 0.4s ease'
+                            }} 
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          <span>
+                            {Array.isArray(acceptedClaim.milestones) && acceptedClaim.milestones.length > 0
+                              ? `${acceptedClaim.milestones.filter(m => m && m.completed).length} of ${acceptedClaim.milestones.length} milestones complete`
+                              : 'Field investigation & planning ongoing'}
+                          </span>
+                          {acceptedClaim.fundedByIndustry && (
+                            <span style={{ color: '#818cf8', fontWeight: 600 }}>
+                              Empowered by {acceptedClaim.fundedByIndustry.name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span className="tag-pill" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-muted)', border: '1px solid var(--border-color)', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
+                          OPEN FOR ADOPTION
+                        </span>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          No university has claimed this challenge yet. Once a university research team accepts it, live progress updates will appear here.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Industry Status Card */}
                 {userRole === 'industry' && (
                   <div className={`industry-claim-status-card ${acceptedClaim ? 'is-claimed' : 'is-unclaimed'}`}>
@@ -671,7 +705,7 @@ export function ProblemDetailModal({
                       Lead Lab: {acceptedClaim.universityName}
                     </div>
                     <div className="research-deadline-meta">
-                      Target Milestone Deadline: <strong>{acceptedClaim.milestoneDeadline || 'Jan 30, 2027'}</strong>
+                      Academic Institution: <strong>{acceptedClaim.universityName}</strong>
                     </div>
                   </div>
 
@@ -715,7 +749,7 @@ export function ProblemDetailModal({
                     <div 
                       className="research-progress-fill" 
                       style={{ 
-                        width: `${Math.min(acceptedClaim.progress || 0, 100)}%`,
+                        width: `${Math.min(acceptedClaim.progress || 0, 100)}%`, 
                         background: isLockedByOtherUniversity ? '#ef4444' : 'var(--accent-blue, #3b82f6)'
                       }} 
                     />
@@ -725,36 +759,40 @@ export function ProblemDetailModal({
                 {/* Milestones Preview List */}
                 <div className="research-milestones-preview">
                   <div className="milestones-preview-title">
-                    Active Research Milestones ({Array.isArray(acceptedClaim.milestones) ? acceptedClaim.milestones.length : 2})
+                    Active Research Milestones ({Array.isArray(acceptedClaim.milestones) ? acceptedClaim.milestones.length : 0})
                   </div>
-                  <div className="milestones-preview-list">
-                    {(acceptedClaim.milestones && acceptedClaim.milestones.length > 0 
-                      ? acceptedClaim.milestones 
-                      : [
-                          { id: 'm-default-1', title: 'Phase 1: Field Investigation & Scope Definition', deadline: acceptedClaim.milestoneDeadline || 'Jan 30, 2027', completed: (acceptedClaim.progress || 0) >= 50 },
-                          { id: 'm-default-2', title: 'Phase 2: Prototype Development & Testing', deadline: 'Mar 15, 2027', completed: (acceptedClaim.progress || 0) === 100 }
-                        ]
-                    ).map((m, idx) => (
-                      <div key={m.id || idx} className={`milestone-preview-row ${m.completed ? 'is-completed' : ''}`}>
-                        <div className="milestone-dot-indicator">
-                          {m.completed ? (
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12"></polyline>
-                            </svg>
-                          ) : (
-                            <span>{idx + 1}</span>
-                          )}
+                  {Array.isArray(acceptedClaim.milestones) && acceptedClaim.milestones.length > 0 ? (
+                    <div className="milestones-preview-list">
+                      {acceptedClaim.milestones.map((m, idx) => (
+                        <div key={m.id || idx} className={`milestone-preview-row ${m.completed ? 'is-completed' : ''}`}>
+                          <div className="milestone-dot-indicator">
+                            {m.completed ? (
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                              </svg>
+                            ) : (
+                              <span>{idx + 1}</span>
+                            )}
+                          </div>
+                          <div className="milestone-preview-info">
+                            <span className="milestone-preview-name">{m.title}</span>
+                            {m.funding && (
+                              <span className="milestone-preview-due" style={{ color: '#818cf8', fontWeight: 600 }}>
+                                Funding: INR {Number(m.funding.amount).toLocaleString('en-IN')}
+                              </span>
+                            )}
+                          </div>
+                          <span className={`milestone-status-chip ${m.completed ? 'status-done' : 'status-ongoing'}`}>
+                            {m.completed ? 'Completed' : 'Active'}
+                          </span>
                         </div>
-                        <div className="milestone-preview-info">
-                          <span className="milestone-preview-name">{m.title}</span>
-                          <span className="milestone-preview-due">Target: {m.deadline || 'TBD'}</span>
-                        </div>
-                        <span className={`milestone-status-chip ${m.completed ? 'status-done' : 'status-ongoing'}`}>
-                          {m.completed ? 'Completed' : 'Active'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '0.85rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      No milestones published yet by the research team.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
