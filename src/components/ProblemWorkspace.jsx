@@ -8,7 +8,6 @@ import {
   getTeamsForProblem,
   getUniversityStudents
 } from '../services/api';
-import { CivicCertificateModal } from './CivicCertificateModal';
 
 export function ProblemWorkspace({ 
   postId, 
@@ -21,8 +20,6 @@ export function ProblemWorkspace({
   const [isAddingMilestone, setIsAddingMilestone] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDeadline, setNewDeadline] = useState('');
-  const [certStudent, setCertStudent] = useState(null);
-  const [certTeam, setCertTeam] = useState(null);
 
   const assignedTeams = getTeamsForProblem(claim?.universityId || currentAccount?.id, postId);
   const allStudents = getUniversityStudents(claim?.universityId || currentAccount?.id);
@@ -152,16 +149,29 @@ export function ProblemWorkspace({
           </div>
 
           <div className="stakeholder-chip team-stakeholder">
-            <span className="stakeholder-label">ASSIGNED RESEARCH TEAMS</span>
-            <div className="stakeholder-name-row">
+            <div className="stakeholder-label-row">
+              <span className="stakeholder-label">ASSIGNED RESEARCH TEAMS</span>
+              {assignedTeams.length > 0 && isUniversity && (
+                <button
+                  type="button"
+                  className="stakeholder-manage-link"
+                  onClick={onBack}
+                  title="Manage teams in Team Management"
+                >
+                  Manage Teams →
+                </button>
+              )}
+            </div>
+
+            <div className="stakeholder-content-box">
               {assignedTeams.length === 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div className="stakeholder-empty-state">
                   <span className="text-muted" style={{ fontSize: '0.85rem' }}>No student team assigned yet</span>
                   {isUniversity && (
                     <button
                       type="button"
                       className="btn-link-action"
-                      style={{ fontSize: '0.8rem' }}
+                      style={{ fontSize: '0.8rem', marginTop: '0.25rem' }}
                       onClick={onBack}
                     >
                       Configure in Team Management →
@@ -169,31 +179,33 @@ export function ProblemWorkspace({
                   )}
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div className="workspace-teams-stack">
                   {assignedTeams.map((team) => {
                     const teamStudents = (Array.isArray(team.members) && team.members.length > 0)
                       ? team.members
                       : allStudents.filter(s => (team.studentIds || []).includes(s.id));
                     return (
-                      <div key={team.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <span className="team-assigned-name-pill">{team.name}</span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                          {teamStudents.map((s) => (
-                            <button
-                              key={s.id || s.name}
-                              type="button"
-                              className="student-role-pill student-cert-badge-btn"
-                              title={`View/Print Civic Impact Certificate for ${s.name}`}
-                              onClick={() => {
-                                setCertStudent(s);
-                                setCertTeam(team);
-                              }}
-                            >
-                              {s.name} • {s.role}
-                              <span className="cert-micro-tag">Certificate</span>
-                            </button>
-                          ))}
+                      <div key={team.id} className="workspace-team-group">
+                        <div className="workspace-team-name-tag">
+                          <span className="team-indicator-dot" />
+                          <strong className="workspace-team-title">{team.name}</strong>
+                          {team.department && (
+                            <span className="team-dept-subtext">({team.department})</span>
+                          )}
                         </div>
+                        {teamStudents.length > 0 ? (
+                          <div className="workspace-team-students-list">
+                            {teamStudents.map((s) => (
+                              <div key={s.id || s.name} className="workspace-student-row">
+                                <span className="student-bullet" />
+                                <span className="workspace-student-name">{s.name}</span>
+                                <span className="workspace-student-role-badge">{s.role}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-muted" style={{ fontSize: '0.78rem' }}>No student researchers assigned</span>
+                        )}
                       </div>
                     );
                   })}
@@ -388,28 +400,6 @@ export function ProblemWorkspace({
           <span className="workspace-ready-badge">Ready for Collaboration Tools</span>
         </div>
       </div>
-
-      {/* Civic Impact Certificate Generator Modal */}
-      {certStudent && (
-        <CivicCertificateModal
-          isOpen={!!certStudent}
-          onClose={() => {
-            setCertStudent(null);
-            setCertTeam(null);
-          }}
-          student={certStudent}
-          team={certTeam}
-          challenge={{
-            postId: claim.postId,
-            title: claim.title,
-            category: claim.category,
-            progress: claim.progress,
-            universityName: claim.universityName,
-            milestoneDeadline: claim.milestoneDeadline
-          }}
-          universityAccount={currentAccount}
-        />
-      )}
     </div>
   );
 }

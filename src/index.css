@@ -4859,6 +4859,140 @@ body {
   margin-left: auto;
 }
 
+/* ── Problem Workspace Assigned Research Teams Card ── */
+.stakeholder-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+
+.stakeholder-manage-link {
+  background: none;
+  border: none;
+  color: var(--accent-blue, #3b82f6);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.15s ease;
+}
+
+.stakeholder-manage-link:hover {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+.stakeholder-content-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.stakeholder-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.35rem 0;
+}
+
+.workspace-teams-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.workspace-team-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: var(--surface, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+}
+
+[data-theme="light"] .workspace-team-group {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.workspace-team-name-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  flex-wrap: wrap;
+}
+
+.team-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #c084fc;
+  flex-shrink: 0;
+}
+
+.workspace-team-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.team-dept-subtext {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
+.workspace-team-students-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-left: 0.25rem;
+  margin-top: 0.1rem;
+}
+
+.workspace-student-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.84rem;
+  flex-wrap: wrap;
+}
+
+.student-bullet {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.workspace-student-name {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.workspace-student-role-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  padding: 0.1rem 0.5rem;
+  border-radius: 9999px;
+}
+
+[data-theme="light"] .workspace-student-role-badge {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
 /* ── Workspace Empty Canvas (Ready for new modules) ── */
 .workspace-canvas-container {
   min-height: 380px;
