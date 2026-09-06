@@ -502,6 +502,34 @@ export function ProblemDetailModal({
                     <img src={img} alt={title} style={{ width: '100%', maxHeight: '340px', objectFit: 'cover', display: 'block' }} />
                   </div>
                 )}
+
+                {/* Industry Status Card */}
+                {userRole === 'industry' && (
+                  <div className={`industry-claim-status-card ${acceptedClaim ? 'is-claimed' : 'is-unclaimed'}`}>
+                    {acceptedClaim ? (
+                      <>
+                        <div className="status-badge-row">
+                          <span className="tag-pill status-accepted-badge">CLAIMED BY UNIVERSITY</span>
+                          <span className="tag-pill category-tag">{acceptedClaim.milestones?.length || 0} Milestones</span>
+                        </div>
+                        <h4 className="claim-card-title">Taken by: {acceptedClaim.universityName}</h4>
+                        <p className="claim-card-desc">
+                          This challenge has been taken up for academic research. Empower this initiative to review the faculty lead, assigned student cohort, and sponsor key milestones.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="status-badge-row">
+                          <span className="tag-pill tag-unclaimed-badge">AWAITING UNIVERSITY</span>
+                        </div>
+                        <h4 className="claim-card-title">No university has taken the challenge</h4>
+                        <p className="claim-card-desc">
+                          No university research lab has claimed this challenge yet. Industry empowerment and milestone funding will become active once an academic institution accepts the challenge.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
               </>
             )}
 
@@ -569,34 +597,31 @@ export function ProblemDetailModal({
               )}
 
               {/* Industry Specific Workflow Actions */}
-              {userRole === 'industry' && acceptedClaim && (
+              {userRole === 'industry' && (
                 <>
-                  {isMyIndustryFunded ? (
-                    <button 
-                      type="button" 
-                      className="btn btn-blue"
-                      onClick={() => {
-                        if (onOpenWorkspace) onOpenWorkspace(id);
-                        onClose();
-                      }}
-                    >
-                      Enter Funded Workspace →
-                    </button>
-                  ) : !acceptedClaim.fundedByIndustry ? (
+                  {acceptedClaim ? (
                     <button 
                       type="button" 
                       className="btn btn-blue"
                       onClick={() => {
                         if (onFundChallenge) onFundChallenge(id);
+                        else if (onOpenWorkspace) onOpenWorkspace(id);
                         onClose();
                       }}
+                      style={{ fontWeight: 700 }}
                     >
-                      Accept to Fund Challenge →
+                      Empower Challenge →
                     </button>
                   ) : (
-                    <span className="tag-pill" style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
-                      Funded by {acceptedClaim.fundedByIndustry.name}
-                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      disabled
+                      style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                      title="No university has taken this challenge yet"
+                    >
+                      No University Claimed Yet
+                    </button>
                   )}
                 </>
               )}

@@ -6,7 +6,9 @@ import {
   toggleMilestone, 
   deleteMilestone,
   getTeamsForProblem,
-  getUniversityStudents
+  getUniversityStudents,
+  fundMilestone,
+  empowerChallenge
 } from '../services/api';
 
 export function ProblemWorkspace({ 
@@ -20,6 +22,28 @@ export function ProblemWorkspace({
   const [isAddingMilestone, setIsAddingMilestone] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDeadline, setNewDeadline] = useState('');
+
+  const [fundingInputs, setFundingInputs] = useState({});
+  const [fundingErrors, setFundingErrors] = useState({});
+
+  const handleMilestoneFund = (milestoneId) => {
+    const amountStr = fundingInputs[milestoneId];
+    const amount = Number(amountStr);
+    if (!amountStr || isNaN(amount) || amount <= 0) {
+      setFundingErrors(prev => ({ ...prev, [milestoneId]: 'Please enter a valid amount in INR (greater than 0)' }));
+      return;
+    }
+    try {
+      const updated = fundMilestone(postId, milestoneId, amount, currentAccount);
+      if (updated) {
+        setClaim(updated);
+        setFundingInputs(prev => ({ ...prev, [milestoneId]: '' }));
+        setFundingErrors(prev => ({ ...prev, [milestoneId]: '' }));
+      }
+    } catch (err) {
+      setFundingErrors(prev => ({ ...prev, [milestoneId]: err.message || 'Failed to fund milestone.' }));
+    }
+  };
 
   const assignedTeams = getTeamsForProblem(claim?.universityId || currentAccount?.id, postId);
   const allStudents = getUniversityStudents(claim?.universityId || currentAccount?.id);
@@ -110,13 +134,13 @@ export function ProblemWorkspace({
           </button>
           <span className="breadcrumb-separator">/</span>
           <button type="button" className="breadcrumb-link" onClick={onBack}>
-            Accepted Challenges
+            {currentAccount?.role === 'industry' ? 'You Support' : 'Accepted Challenges'}
           </button>
           <span className="breadcrumb-separator">/</span>
           <span className="breadcrumb-current">{claim.title}</span>
         </div>
         <button type="button" className="btn btn-outline btn-sm" onClick={onBack}>
-          ← Back to Accepted Challenges
+          {currentAccount?.role === 'industry' ? '← Back to You Support' : '← Back to Accepted Challenges'}
         </button>
       </div>
 
@@ -222,7 +246,7 @@ export function ProblemWorkspace({
                     {claim.fundedByIndustry.name?.slice(0, 2).toUpperCase() || 'IN'}
                   </div>
                   <strong>{claim.fundedByIndustry.name}</strong>
-                  <span className="stakeholder-status-pill">Funding Confirmed</span>
+                  <span className="stakeholder-status-pill">Empowering Partner</span>
                 </>
               ) : (
                 <div className="awaiting-funding-box">
@@ -231,10 +255,14 @@ export function ProblemWorkspace({
                     <button 
                       type="button" 
                       className="btn btn-blue btn-sm" 
-                      onClick={() => onFundChallenge && onFundChallenge(claim.postId)}
-                      style={{ marginLeft: '0.75rem' }}
+                      onClick={() => {
+                        const updated = empowerChallenge(claim.postId, currentAccount);
+                        if (updated) setClaim(updated);
+                        if (onFundChallenge) onFundChallenge(claim.postId);
+                      }}
+                      style={{ marginLeft: '0.75rem', fontWeight: 600 }}
                     >
-                      Accept to Fund Challenge
+                      Empower Project
                     </button>
                   )}
                 </div>
@@ -337,44 +365,96 @@ export function ProblemWorkspace({
             </div>
           ) : (
             milestones.map((m, idx) => (
-              <div 
-                key={m.id || idx} 
-                className={`milestone-item ${m.completed ? 'is-completed' : ''}`}
-              >
-                <label className="milestone-checkbox-wrap">
-                  <input
-                    type="checkbox"
-                    checked={!!m.completed}
-                    onChange={() => handleToggle(m.id)}
-                    className="milestone-checkbox"
-                    disabled={!isUniversity}
-                    title={isUniversity ? "Check to complete milestone" : "View-only for industry sponsor"}
-                  />
-                  <span className="milestone-custom-check" />
-                </label>
+              <div key={m.id || idx} className="milestone-card-wrapper">
+                <div 
+                  className={`milestone-item ${m.completed ? 'is-completed' : ''}`}
+                >
+                  <label className="milestone-checkbox-wrap">
+                    <input
+                      type="checkbox"
+                      checked={!!m.completed}
+                      onChange={() => handleToggle(m.id)}
+                      className="milestone-checkbox"
+                      disabled={!isUniversity}
+                      title={isUniversity ? "Check to complete milestone" : "View-only for industry sponsor"}
+                    />
+                    <span className="milestone-custom-check" />
+                  </label>
 
-                <div className="milestone-info">
-                  <span className="milestone-title-text">{m.title}</span>
-                  <span className="milestone-target-date">Target: {m.deadline}</span>
+                  <div className="milestone-info">
+                    <span className="milestone-title-text">{m.title}</span>
+                    <div className="milestone-sub-meta">
+                      <span className="milestone-target-date">Target: {m.deadline}</span>
+
+                      {/* Milestone Funding Details */}
+                      {m.funding && (
+                        <span className={`milestone-funding-pill ${m.completed ? 'is-transferred' : 'is-committed'}`}>
+                          <span className={`funding-status-dot ${m.completed ? 'green' : 'blue'}`} />
+                          {m.completed
+                            ? `₹${Number(m.funding.amount).toLocaleString('en-IN')} transferred ${isUniversity ? `from ${m.funding.industryName || 'Industry Partner'}` : `to ${claim.universityName || 'University'}`}`
+                            : `₹${Number(m.funding.amount).toLocaleString('en-IN')} committed ${isUniversity ? `by ${m.funding.industryName || 'Industry Partner'}` : 'on milestone completion'}`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="milestone-actions-cluster">
+                    {m.funding && (
+                      <span className={`milestone-funding-badge ${m.completed ? 'badge-transferred' : 'badge-committed'}`}>
+                        {m.completed ? 'TRANSFERRED' : 'COMMITTED'}
+                      </span>
+                    )}
+
+                    <span className={`milestone-status-tag ${m.completed ? 'tag-completed' : 'tag-pending'}`}>
+                      {m.completed ? 'COMPLETED' : 'IN PROGRESS'}
+                    </span>
+
+                    {isUniversity && (
+                      <button
+                        type="button"
+                        className="milestone-delete-btn"
+                        onClick={() => handleDelete(m.id)}
+                        title="Delete milestone"
+                        aria-label="Delete milestone"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="milestone-actions-cluster">
-                  <span className={`milestone-status-tag ${m.completed ? 'tag-completed' : 'tag-pending'}`}>
-                    {m.completed ? 'COMPLETED' : 'IN PROGRESS'}
-                  </span>
-
-                  {isUniversity && (
+                {/* Industry Funding Input Box for un-funded milestones */}
+                {!m.funding && !m.completed && currentAccount?.role === 'industry' && (
+                  <div className="milestone-fund-box-row">
+                    <span className="fund-box-label">Fund Milestone:</span>
+                    <div className="fund-input-wrapper">
+                      <span className="rupee-currency-prefix">₹</span>
+                      <input
+                        type="number"
+                        min="100"
+                        step="500"
+                        placeholder="Enter amount (e.g. 50000)"
+                        value={fundingInputs[m.id] || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFundingInputs(prev => ({ ...prev, [m.id]: val }));
+                          if (fundingErrors[m.id]) setFundingErrors(prev => ({ ...prev, [m.id]: '' }));
+                        }}
+                        className="milestone-fund-input"
+                      />
+                    </div>
                     <button
                       type="button"
-                      className="milestone-delete-btn"
-                      onClick={() => handleDelete(m.id)}
-                      title="Delete milestone"
-                      aria-label="Delete milestone"
+                      className="btn btn-blue btn-sm fund-commit-btn"
+                      onClick={() => handleMilestoneFund(m.id)}
                     >
-                      ✕
+                      Fund Milestone
                     </button>
-                  )}
-                </div>
+                    {fundingErrors[m.id] && (
+                      <span className="fund-error-text">{fundingErrors[m.id]}</span>
+                    )}
+                  </div>
+                )}
               </div>
             ))
           )}

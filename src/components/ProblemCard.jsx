@@ -150,11 +150,40 @@ export function ProblemCard({
                     LOCKED
                   </span>
                 )}
+                {currentAccount?.role === 'industry' && (
+                  <span 
+                    className="tag-pill" 
+                    style={{ 
+                      background: 'rgba(59, 130, 246, 0.12)', 
+                      color: '#3b82f6', 
+                      border: '1px solid rgba(59, 130, 246, 0.3)', 
+                      fontWeight: 600,
+                      fontSize: '0.72rem'
+                    }}
+                  >
+                    TAKEN BY {acceptedClaim.universityName?.toUpperCase()}
+                  </span>
+                )}
               </>
             ) : isResolved ? (
               <span className="tag-pill status-resolved-badge">RESOLVED</span>
             ) : (
-              <span className="tag-pill status-open-badge">OPEN</span>
+              <>
+                <span className="tag-pill status-open-badge">OPEN</span>
+                {currentAccount?.role === 'industry' && (
+                  <span 
+                    className="tag-pill" 
+                    style={{ 
+                      background: 'rgba(255, 255, 255, 0.04)', 
+                      color: 'var(--text-muted)', 
+                      border: '1px solid var(--border-color)', 
+                      fontSize: '0.72rem'
+                    }}
+                  >
+                    NO UNIVERSITY CLAIMED
+                  </span>
+                )}
+              </>
             )}
             <span className="tag-pill category-tag">{category || 'General'}</span>
 
@@ -264,22 +293,51 @@ export function ProblemCard({
                 >
                   Locked • {acceptedClaim.universityName}
                 </span>
+              ) : currentAccount?.role === 'industry' ? (
+                <button
+                  type="button"
+                  className="btn btn-blue btn-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onOpenWorkspace) onOpenWorkspace(id);
+                    else if (onSelectPost) onSelectPost(post);
+                  }}
+                  style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem', whiteSpace: 'nowrap', fontWeight: 600 }}
+                >
+                  Empower →
+                </button>
               ) : null}
             </>
           ) : (
-            currentAccount?.role === 'university' && onAcceptChallenge && (
-              <button
-                type="button"
-                className="btn btn-blue btn-sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAcceptChallenge(post);
-                }}
-                style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem', whiteSpace: 'nowrap' }}
-              >
-                Accept Challenge →
-              </button>
-            )
+            <>
+              {currentAccount?.role === 'university' && onAcceptChallenge && (
+                <button
+                  type="button"
+                  className="btn btn-blue btn-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAcceptChallenge(post);
+                  }}
+                  style={{ fontSize: '0.78rem', padding: '0.25rem 0.65rem', whiteSpace: 'nowrap' }}
+                >
+                  Accept Challenge →
+                </button>
+              )}
+              {currentAccount?.role === 'industry' && (
+                <span 
+                  className="tag-pill" 
+                  style={{ 
+                    fontSize: '0.74rem', 
+                    color: 'var(--text-muted)', 
+                    border: '1px solid var(--border-color)', 
+                    background: 'rgba(255, 255, 255, 0.04)',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  No University Claimed
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>

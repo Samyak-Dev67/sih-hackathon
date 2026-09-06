@@ -1609,9 +1609,21 @@ export function toggleMilestone(postId, milestoneId) {
   const updated = list.map(c => {
     if (String(c.postId) === String(postId)) {
       const currentMilestones = c.milestones || [];
-      const newMilestones = currentMilestones.map(m => 
-        m.id === milestoneId ? { ...m, completed: !m.completed } : m
-      );
+      const newMilestones = currentMilestones.map(m => {
+        if (m.id === milestoneId) {
+          const nextCompleted = !m.completed;
+          let updatedFunding = m.funding;
+          if (updatedFunding) {
+            updatedFunding = {
+              ...updatedFunding,
+              transferred: nextCompleted,
+              transferredAt: nextCompleted ? new Date().toISOString() : null
+            };
+          }
+          return { ...m, completed: nextCompleted, funding: updatedFunding };
+        }
+        return m;
+      });
       return {
         ...c,
         milestones: newMilestones,
@@ -1673,22 +1685,115 @@ export function isProblemAcceptedByOtherUniversity(postId, currentUniversityId) 
 
 export function fundChallenge(postId, industryAccount) {
   if (!postId || !industryAccount) return null;
+  return empowerChallenge(postId, industryAccount);
+}
+
+export function empowerChallenge(postId, industryAccount) {
+  if (!postId || !industryAccount) return null;
   const list = getAcceptedChallenges();
   const updated = list.map(c => {
     if (String(c.postId) === String(postId)) {
+      const empoweredByList = Array.isArray(c.empoweredBy) ? c.empoweredBy : [];
+      const alreadyIn = empoweredByList.some(e => e.id === industryAccount.id);
+      const newEmpoweredBy = alreadyIn 
+        ? empoweredByList 
+        : [...empoweredByList, {
+            id: industryAccount.id,
+            name: industryAccount.name || 'Industry Partner',
+            empoweredAt: new Date().toISOString()
+          }];
+
+      const fundedObj = c.fundedByIndustry || {
+        id: industryAccount.id,
+        name: industryAccount.name || 'Industry Partner',
+        fundedAt: new Date().toISOString()
+      };
+
       return {
         ...c,
-        fundedByIndustry: {
-          id: industryAccount.id,
-          name: industryAccount.name || 'Industry Sponsor',
-          fundedAt: new Date().toISOString()
-        }
+        empoweredBy: newEmpoweredBy,
+        fundedByIndustry: fundedObj
       };
     }
     return c;
   });
   saveAcceptedChallenges(updated);
   return updated.find(c => String(c.postId) === String(postId));
+}
+
+export function fundMilestone(postId, milestoneId, amountInRupees, industryAccount) {
+  if (!postId || !milestoneId || !industryAccount) return null;
+  const numAmount = Number(amountInRupees);
+  if (isNaN(numAmount) || numAmount <= 0) {
+    throw new Error('Please enter a valid funding amount in Rupees (greater than 0).');
+  }
+
+  const list = getAcceptedChallenges();
+  const updated = list.map(c => {
+    if (String(c.postId) === String(postId)) {
+      const currentMilestones = c.milestones || [];
+      const newMilestones = currentMilestones.map(m => {
+        if (m.id === milestoneId) {
+          const isComp = Boolean(m.completed);
+          return {
+            ...m,
+            funding: {
+              amount: numAmount,
+              currency: 'INR',
+              industryId: industryAccount.id,
+              industryName: industryAccount.name || 'Industry Partner',
+              pledgedAt: new Date().toISOString(),
+              transferred: isComp,
+              transferredAt: isComp ? new Date().toISOString() : null
+            }
+          };
+        }
+        return m;
+      });
+
+      const empoweredByList = Array.isArray(c.empoweredBy) ? c.empoweredBy : [];
+      const alreadyIn = empoweredByList.some(e => e.id === industryAccount.id);
+      const newEmpoweredBy = alreadyIn
+        ? empoweredByList
+        : [...empoweredByList, {
+            id: industryAccount.id,
+            name: industryAccount.name || 'Industry Partner',
+            empoweredAt: new Date().toISOString()
+          }];
+
+      return {
+        ...c,
+        milestones: newMilestones,
+        empoweredBy: newEmpoweredBy,
+        fundedByIndustry: c.fundedByIndustry || {
+          id: industryAccount.id,
+          name: industryAccount.name || 'Industry Partner',
+          fundedAt: new Date().toISOString()
+        }
+      };
+    }
+    return c;
+  });
+
+  saveAcceptedChallenges(updated);
+  return updated.find(c => String(c.postId) === String(postId));
+}
+
+export function getIndustrySupportedChallenges(industryId = null) {
+  const list = getAcceptedChallenges();
+  if (!industryId) return list;
+  return list.filter(c => {
+    if (Array.isArray(c.empoweredBy) && c.empoweredBy.some(e => e.id === industryId)) {
+      return true;
+    }
+    if (c.fundedByIndustry && (c.fundedByIndustry.id === industryId || (industryId === 'ind-1' && c.fundedByIndustry.id === 'ind-1'))) {
+      return true;
+    }
+    if (Array.isArray(c.milestones) && c.milestones.some(m => m.funding && (m.funding.industryId === industryId || (industryId === 'ind-1' && m.funding.industryId === 'ind-1')))) {
+      return true;
+    }
+    return false;
+  });
 }
 
 export function canAccessWorkspace(postId, account) {
@@ -1702,9 +1807,9 @@ export function canAccessWorkspace(postId, account) {
     return claim.universityId === account.id;
   }
 
-  // Industry check: Exclusively visible if industry accepts to fund it
+  // Industry check: Industry can access any accepted research challenge workspace to inspect team & fund milestones
   if (account.role === 'industry') {
-    return claim.fundedByIndustry && (claim.fundedByIndustry.id === account.id || claim.fundedByIndustry.id === 'ind-1');
+    return true;
   }
 
   return false;
@@ -2467,7 +2572,10 @@ export const postService = {
   updateUniversityTeam,
   deleteUniversityTeam,
   toggleTeamProblemAssignment,
-  getTeamsForProblem
+  getTeamsForProblem,
+  empowerChallenge,
+  fundMilestone,
+  getIndustrySupportedChallenges
 };
 
 export { filterProblems };
