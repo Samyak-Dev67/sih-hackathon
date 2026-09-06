@@ -136,17 +136,6 @@ function UniversityPage() {
 
   const activeWorkspacePost = posts.find(p => String(p.id) === String(activeWorkspacePostId));
 
-  const handleSelectNewsProject = (postId, story) => {
-    const matchingPost = posts.find(p => String(p.id) === String(postId));
-    if (account && story?.universityId === account.id) {
-      handleOpenWorkspace(postId);
-    } else if (matchingPost) {
-      setSelectedPost(matchingPost);
-    } else {
-      handleOpenWorkspace(postId);
-    }
-  };
-
   return (
     <div className="app-shell">
       <Navbar 
@@ -158,7 +147,6 @@ function UniversityPage() {
         onLogout={handleLogout}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onSelectProject={handleSelectNewsProject}
       />
       <main className="app-main-viewport">
         <AuthGuard expectedRole="university" currentAccount={account}>

@@ -155,13 +155,6 @@ function CitizenPage() {
     return updated;
   };
 
-  const handleSelectNewsProject = (postId) => {
-    const matchingPost = posts.find(p => String(p.id) === String(postId));
-    if (matchingPost) {
-      setSelectedPost(matchingPost);
-    }
-  };
-
   return (
     <div className="app-shell">
       <Navbar 
@@ -173,7 +166,6 @@ function CitizenPage() {
         onLogout={handleLogout}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onSelectProject={handleSelectNewsProject}
       />
       <main className="app-main-viewport">
         <AuthGuard expectedRole="citizen" currentAccount={account}>

@@ -5,7 +5,8 @@ import {
   getPostAuthorInfo, 
   getPostStatus, 
   formatRelativeTime,
-  getChallengeWorkspace 
+  getChallengeWorkspace,
+  getSolutions
 } from '../services/api';
 
 export function ProblemDetailModal({ 
@@ -91,6 +92,14 @@ export function ProblemDetailModal({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
+  // Solutions state
+  const [solutions, setSolutions] = useState(() => {
+    if (Array.isArray(post.solutions)) return post.solutions;
+    if (Array.isArray(post.solution)) return post.solution;
+    return [];
+  });
+  const [loadingSolutions, setLoadingSolutions] = useState(false);
+
   // Sync state if post changes
   useEffect(() => {
     setEditTitle(post.title || '');
@@ -104,7 +113,36 @@ export function ProblemDetailModal({
     setEditError('');
     setDeleteError('');
     setCurrentStatus(getPostStatus(post));
+    
+    if (Array.isArray(post.solutions)) {
+      setSolutions(post.solutions);
+    } else if (Array.isArray(post.solution)) {
+      setSolutions(post.solution);
+    }
   }, [post]);
+
+  // Load solutions for problem ID
+  useEffect(() => {
+    let isMounted = true;
+    if (id) {
+      setLoadingSolutions(true);
+      getSolutions(id)
+        .then((sols) => {
+          if (isMounted && Array.isArray(sols)) {
+            setSolutions(sols);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to load solutions:', err);
+        })
+        .finally(() => {
+          if (isMounted) setLoadingSolutions(false);
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
@@ -202,23 +240,15 @@ export function ProblemDetailModal({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+      <div className="detail-modal-card problem-detail-modal-card" onClick={(e) => e.stopPropagation()}>
         {/* Header Bar */}
-        <div className="modal-header">
+        <div className="modal-header-bar">
           <div className="modal-header-meta">
             {acceptedClaim ? (
               <>
-                <span className="tag-pill status-accepted-badge">ACCEPTED</span>
+                <span className="tag-pill status-accepted-badge">ACCEPTED RESEARCH</span>
                 {isLockedByOtherUniversity && userRole === 'university' && (
-                  <span 
-                    className="tag-pill badge-locked" 
-                    style={{ 
-                      background: 'rgba(239, 68, 68, 0.15)', 
-                      color: '#ef4444', 
-                      border: '1px solid rgba(239, 68, 68, 0.35)', 
-                      fontWeight: 700 
-                    }}
-                  >
+                  <span className="tag-pill badge-locked-pill">
                     LOCKED
                   </span>
                 )}
@@ -233,18 +263,22 @@ export function ProblemDetailModal({
           </div>
           <button 
             type="button" 
-            className="modal-close-btn" 
+            className="modal-close-icon-btn" 
             onClick={onClose}
             aria-label="Close"
+            title="Close modal"
           >
-            ✕
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
           </button>
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="modal-body-scroll">
+        <div className="modal-scroll-body">
           {/* Main Problem Details Section */}
-          <div className="problem-detail-content">
+          <div className="detail-problem-section">
             {/* Author Meta Row */}
             <div className="detail-author-row">
               <div className="author-avatar-circle" title={`Author: ${authorInfo.name}`}>
@@ -464,70 +498,14 @@ export function ProblemDetailModal({
                 </div>
 
                 {img && (
-                  <div style={{ borderRadius: '8px', overflow: 'hidden', margin: '0.5rem 0' }}>
-                    <img src={img} alt={title} style={{ maxWidth: '100%', height: 'auto' }} />
-                  </div>
-                )}
-
-                {/* Research Status Banner & Progress Bar if Accepted */}
-                {acceptedClaim && (
-                  <div 
-                    className="detail-claim-status-box"
-                    style={{
-                      marginTop: '1rem',
-                      marginBottom: '0.85rem',
-                      padding: '0.9rem 1.15rem',
-                      borderRadius: '8px',
-                      background: isLockedByOtherUniversity 
-                        ? 'rgba(239, 68, 68, 0.07)' 
-                        : 'rgba(56, 189, 248, 0.08)',
-                      border: `1px solid ${isLockedByOtherUniversity ? 'rgba(239, 68, 68, 0.28)' : 'rgba(56, 189, 248, 0.28)'}`
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.45rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span 
-                          style={{ 
-                            fontWeight: 700, 
-                            fontSize: '0.82rem', 
-                            textTransform: 'uppercase', 
-                            letterSpacing: '0.04em',
-                            color: isLockedByOtherUniversity ? '#ef4444' : '#38bdf8' 
-                          }}
-                        >
-                          {isLockedByOtherUniversity ? 'Locked • Claimed by Another University' : 'Active University Workspace'}
-                        </span>
-                        <span style={{ fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
-                          • {acceptedClaim.universityName}
-                        </span>
-                      </div>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 700, color: isLockedByOtherUniversity ? '#ef4444' : '#38bdf8' }}>
-                        Progress: {acceptedClaim.progress || 0}%
-                      </span>
-                    </div>
-
-                    <div style={{ width: '100%', height: '6px', background: 'var(--border-color)', borderRadius: '999px', overflow: 'hidden', marginBottom: '0.5rem' }}>
-                      <div 
-                        style={{ 
-                          width: `${Math.min(acceptedClaim.progress || 0, 100)}%`, 
-                          height: '100%', 
-                          background: isLockedByOtherUniversity ? '#ef4444' : '#38bdf8',
-                          transition: 'width 0.3s ease' 
-                        }} 
-                      />
-                    </div>
-
-                    {isLockedByOtherUniversity && userRole === 'university' && (
-                      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                        This civic problem was accepted by {acceptedClaim.universityName} and is locked. Other university accounts cannot accept or claim this problem.
-                      </p>
-                    )}
+                  <div style={{ borderRadius: '10px', overflow: 'hidden', margin: '0.85rem 0', border: '1px solid var(--border-color)' }}>
+                    <img src={img} alt={title} style={{ width: '100%', maxHeight: '340px', objectFit: 'cover', display: 'block' }} />
                   </div>
                 )}
               </>
             )}
 
-            {/* Like / Action Bar */}
+            {/* Actions Bar */}
             <div className="detail-actions-bar">
               <button 
                 type="button" 
@@ -576,20 +554,14 @@ export function ProblemDetailModal({
                   ) : (
                     <button 
                       type="button" 
-                      className="btn btn-outline"
+                      className="btn-locked-status"
                       disabled
-                      style={{ 
-                        opacity: 0.65, 
-                        cursor: 'not-allowed', 
-                        borderColor: 'rgba(239, 68, 68, 0.4)', 
-                        color: '#ef4444', 
-                        background: 'rgba(239, 68, 68, 0.08)', 
-                        fontWeight: 600,
-                        fontSize: '0.84rem',
-                        padding: '0.45rem 0.95rem'
-                      }}
                       title={`Locked: Accepted by ${acceptedClaim.universityName}`}
                     >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '6px' }}>
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                      </svg>
                       Locked • Accepted by {acceptedClaim.universityName}
                     </button>
                   )}
@@ -641,73 +613,179 @@ export function ProblemDetailModal({
               )}
             </div>
 
-            {/* University & Industry Collaboration Status Card */}
+            {/* Unified Institutional Research & Governance Card */}
             {acceptedClaim && (
-              <div className="detail-research-status-card" style={{
-                marginTop: '1.5rem',
-                padding: '1.25rem 1.4rem',
-                borderRadius: '14px',
-                background: 'var(--surface-2, rgba(255, 255, 255, 0.04))',
-                border: '1px solid var(--border-color)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1rem'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '1rem'
-                }}>
-                  <div>
-                    <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 800, color: 'var(--accent-blue, #3b82f6)', letterSpacing: '0.04em' }}>
-                      Active University Research
+              <div className={`detail-research-status-card ${isLockedByOtherUniversity ? 'is-locked' : 'is-active'}`}>
+                {/* Header Row */}
+                <div className="research-status-card-header">
+                  <div className="research-lead-col">
+                    <div className="research-card-eyebrow">
+                      {isLockedByOtherUniversity ? (
+                        <span className="eyebrow-tag locked-eyebrow">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                          </svg>
+                          Institutional Research • Locked
+                        </span>
+                      ) : isMyUniversityAccepted ? (
+                        <span className="eyebrow-tag active-eyebrow">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                          </svg>
+                          Active University Workspace • Lead Lab
+                        </span>
+                      ) : (
+                        <span className="eyebrow-tag general-eyebrow">
+                          Active University Research
+                        </span>
+                      )}
                     </div>
-                    <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '0.2rem' }}>
+                    <div className="research-lab-name">
                       Lead Lab: {acceptedClaim.universityName}
                     </div>
-                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                      Milestone Deadline: {acceptedClaim.milestoneDeadline}
+                    <div className="research-deadline-meta">
+                      Target Milestone Deadline: <strong>{acceptedClaim.milestoneDeadline || 'Jan 30, 2027'}</strong>
                     </div>
                   </div>
 
-                  <div>
+                  <div className="research-sponsor-col">
                     {acceptedClaim.fundedByIndustry ? (
-                      <div style={{ textAlign: 'right' }}>
+                      <div className="sponsor-funded-block">
                         <span className="role-badge-tag badge-inds">INDUSTRY FUNDED</span>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>
-                          {acceptedClaim.fundedByIndustry.name}
-                        </div>
+                        <div className="sponsor-org-name">{acceptedClaim.fundedByIndustry.name}</div>
                       </div>
                     ) : (
-                      <span className="tag-pill" style={{ background: 'rgba(244, 114, 182, 0.12)', color: '#f472b6', border: '1px solid rgba(244, 114, 182, 0.25)', fontSize: '0.78rem' }}>
+                      <span className="tag-pill sponsor-open-badge">
                         Open for Industry Sponsorship
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Progress bar dictated by milestones */}
-                <div style={{ width: '100%', paddingTop: '0.5rem', borderTop: '1px solid var(--border-color)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', fontWeight: 700, marginBottom: '0.4rem' }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Overall Completion Progress</span>
-                    <span style={{ color: '#3b82f6' }}>{acceptedClaim.progress || 0}%</span>
+                {/* Governance Alert Notice when locked */}
+                {isLockedByOtherUniversity && userRole === 'university' && (
+                  <div className="research-governance-notice">
+                    <div className="governance-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                      </svg>
+                    </div>
+                    <div className="governance-text">
+                      This civic problem was claimed by <strong>{acceptedClaim.universityName}</strong> and is locked. In accordance with platform governance, other university accounts cannot claim or overwrite this project.
+                    </div>
                   </div>
-                  <div style={{ width: '100%', height: '7px', background: 'var(--surface, rgba(255, 255, 255, 0.08))', borderRadius: '9999px', overflow: 'hidden' }}>
+                )}
+
+                {/* Completion Progress Bar */}
+                <div className="research-progress-section">
+                  <div className="research-progress-header">
+                    <span className="progress-label">Overall Completion Progress</span>
+                    <span className="progress-value">{acceptedClaim.progress || 0}%</span>
+                  </div>
+                  <div className="research-progress-track">
                     <div 
+                      className="research-progress-fill" 
                       style={{ 
-                        width: `${Math.min(acceptedClaim.progress || 0, 100)}%`, 
-                        height: '100%', 
-                        background: '#3b82f6', 
-                        borderRadius: '9999px', 
-                        transition: 'width 0.3s ease' 
+                        width: `${Math.min(acceptedClaim.progress || 0, 100)}%`,
+                        background: isLockedByOtherUniversity ? '#ef4444' : 'var(--accent-blue, #3b82f6)'
                       }} 
                     />
                   </div>
                 </div>
+
+                {/* Milestones Preview List */}
+                <div className="research-milestones-preview">
+                  <div className="milestones-preview-title">
+                    Active Research Milestones ({Array.isArray(acceptedClaim.milestones) ? acceptedClaim.milestones.length : 2})
+                  </div>
+                  <div className="milestones-preview-list">
+                    {(acceptedClaim.milestones && acceptedClaim.milestones.length > 0 
+                      ? acceptedClaim.milestones 
+                      : [
+                          { id: 'm-default-1', title: 'Phase 1: Field Investigation & Scope Definition', deadline: acceptedClaim.milestoneDeadline || 'Jan 30, 2027', completed: (acceptedClaim.progress || 0) >= 50 },
+                          { id: 'm-default-2', title: 'Phase 2: Prototype Development & Testing', deadline: 'Mar 15, 2027', completed: (acceptedClaim.progress || 0) === 100 }
+                        ]
+                    ).map((m, idx) => (
+                      <div key={m.id || idx} className={`milestone-preview-row ${m.completed ? 'is-completed' : ''}`}>
+                        <div className="milestone-dot-indicator">
+                          {m.completed ? (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                          ) : (
+                            <span>{idx + 1}</span>
+                          )}
+                        </div>
+                        <div className="milestone-preview-info">
+                          <span className="milestone-preview-name">{m.title}</span>
+                          <span className="milestone-preview-due">Target: {m.deadline || 'TBD'}</span>
+                        </div>
+                        <span className={`milestone-status-chip ${m.completed ? 'status-done' : 'status-ongoing'}`}>
+                          {m.completed ? 'Completed' : 'Active'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
+
+            {/* Community Solutions & Research Evidence Section */}
+            <div className="detail-solutions-container" style={{ marginTop: '1.75rem' }}>
+              <div className="solutions-section-header">
+                <div className="solutions-header-left">
+                  <h3>Community Solutions & Notes</h3>
+                  <span className="solutions-badge-count">{solutions.length}</span>
+                </div>
+                <span className="solutions-header-note">
+                  Public collaborative evidence
+                </span>
+              </div>
+
+              {loadingSolutions ? (
+                <div className="empty-solutions-card" style={{ marginTop: '0.85rem' }}>
+                  <p>Loading solutions...</p>
+                </div>
+              ) : solutions.length === 0 ? (
+                <div className="empty-solutions-card" style={{ marginTop: '0.85rem' }}>
+                  <p>No community solutions submitted yet.</p>
+                  <span className="empty-subtext">
+                    {acceptedClaim 
+                      ? `As research milestones progress with ${acceptedClaim.universityName}, prototypes and findings will be published here.`
+                      : 'Universities and partners can propose solutions once investigation begins.'}
+                  </span>
+                </div>
+              ) : (
+                <div className="solutions-list" style={{ marginTop: '0.85rem' }}>
+                  {solutions.map((sol, index) => (
+                    <div key={sol.id || index} className="solution-item-card">
+                      <div className="solution-card-top">
+                        <div className="solution-org-info">
+                          <strong className="solution-org-title">{sol.author_name || 'Academic Partner'}</strong>
+                          <span className="role-badge-tag badge-uni">
+                            {(sol.author_role || 'University').toUpperCase()}
+                          </span>
+                        </div>
+                        <span className="solution-timeline-pill">
+                          {formatRelativeTime(sol.created_at)}
+                        </span>
+                      </div>
+                      <h4 className="solution-title">{sol.title}</h4>
+                      <p className="solution-description-text">{sol.desc || sol.proposed_approach}</p>
+                      {sol.proposed_approach && sol.proposed_approach !== sol.desc && (
+                        <div className="solution-approach-block">
+                          <strong>Proposed Approach:</strong> {sol.proposed_approach}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {feedbackMsg && (

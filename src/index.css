@@ -1705,18 +1705,27 @@ body {
 }
 
 .modal-close-icon-btn {
-  background: none;
-  border: none;
-  font-size: 1.1rem;
-  color: var(--text-muted);
+  background: var(--bg-surface, #1e293b);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  font-size: 1rem;
+  color: var(--text-muted, #94a3b8);
   cursor: pointer;
-  padding: 0.25rem 0.5rem;
-  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+  flex-shrink: 0;
 }
 
 .modal-close-icon-btn:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary, #ffffff);
+  border-color: var(--border-hover, rgba(255, 255, 255, 0.25));
+  transform: rotate(90deg);
 }
 
 .modal-scroll-body {
@@ -1804,6 +1813,314 @@ body {
   background: rgba(239, 68, 68, 0.12);
   color: #EF4444;
   border-color: rgba(239, 68, 68, 0.3);
+}
+
+.btn-locked-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
+.badge-locked-pill {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  font-weight: 700;
+}
+
+/* Institutional Research & Governance Card */
+.detail-research-status-card {
+  background: var(--bg-surface, #1e293b);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  border-radius: 14px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.detail-research-status-card.is-locked {
+  border-color: rgba(239, 68, 68, 0.28);
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.04) 0%, var(--bg-surface, #1e293b) 100%);
+}
+
+.detail-research-status-card.is-active {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.04) 0%, var(--bg-surface, #1e293b) 100%);
+}
+
+.research-status-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.research-lead-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.research-card-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.eyebrow-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+}
+
+.locked-eyebrow {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.active-eyebrow {
+  color: var(--accent-blue, #3b82f6);
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.general-eyebrow {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.research-lab-name {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.research-deadline-meta {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.research-deadline-meta strong {
+  color: var(--text-primary);
+}
+
+.research-sponsor-col {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.sponsor-funded-block {
+  text-align: right;
+}
+
+.sponsor-org-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 0.25rem;
+}
+
+.sponsor-open-badge {
+  background: rgba(244, 114, 182, 0.1);
+  color: #f472b6;
+  border: 1px solid rgba(244, 114, 182, 0.25);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.research-governance-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+.governance-icon {
+  color: #ef4444;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.governance-text {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.governance-text strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.research-progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.research-progress-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.progress-label {
+  color: var(--text-secondary);
+}
+
+.progress-value {
+  color: var(--text-primary);
+}
+
+.research-progress-track {
+  width: 100%;
+  height: 8px;
+  background: var(--bg-secondary, rgba(255, 255, 255, 0.06));
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.research-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.4s ease;
+}
+
+.research-milestones-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.milestones-preview-title {
+  font-size: 0.8rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.milestones-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.milestone-preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+}
+
+.milestone-dot-indicator {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.milestone-preview-row.is-completed .milestone-dot-indicator {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #22c55e;
+}
+
+.milestone-preview-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.milestone-preview-name {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.milestone-preview-due {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.milestone-status-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.milestone-status-chip.status-done {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.milestone-status-chip.status-ongoing {
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.solution-approach-block {
+  background: var(--bg-secondary);
+  border-left: 3px solid var(--accent-blue);
+  padding: 0.6rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  margin-top: 0.4rem;
+  line-height: 1.5;
 }
 
 /* Submit Solution Box */
@@ -6731,376 +7048,4 @@ body {
     size: landscape;
     margin: 0.5cm;
   }
-}
-
-/* ==========================================================================
-   LIVE CIVIC RESEARCH ADOPTIONS NEWS TICKER & REGISTRY
-   ========================================================================== */
-.civic-news-bar {
-  background: rgba(15, 23, 42, 0.78);
-  border-top: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  position: relative;
-  z-index: 99;
-  transition: all 0.2s ease;
-}
-
-[data-theme="light"] .civic-news-bar {
-  background: rgba(248, 250, 252, 0.95);
-  border-top-color: rgba(0, 0, 0, 0.06);
-  border-bottom-color: rgba(0, 0, 0, 0.08);
-}
-
-.civic-news-inner {
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 0.35rem 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.85rem;
-}
-
-.civic-news-badge-group {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-.civic-pulse-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
-  animation: civicPulse 1.8s infinite;
-  display: inline-block;
-}
-
-@keyframes civicPulse {
-  0% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
-  }
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0);
-  }
-  100% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
-  }
-}
-
-.civic-news-kicker {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: #c084fc;
-  text-transform: uppercase;
-}
-
-[data-theme="light"] .civic-news-kicker {
-  color: #7e22ce;
-}
-
-.civic-news-counter-pill {
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.1rem 0.4rem;
-  border-radius: 9999px;
-  background: rgba(147, 51, 234, 0.15);
-  color: #d8b4fe;
-  border: 1px solid rgba(147, 51, 234, 0.25);
-}
-
-[data-theme="light"] .civic-news-counter-pill {
-  background: #f3e8ff;
-  color: #6b21a8;
-  border-color: #d8b4fe;
-}
-
-.civic-news-divider-vert {
-  width: 1px;
-  height: 15px;
-  background: var(--border-color);
-  flex-shrink: 0;
-}
-
-.civic-news-content-track {
-  flex: 1;
-  min-width: 0;
-  cursor: pointer;
-  overflow: hidden;
-  padding: 0.15rem 0.25rem;
-  border-radius: 4px;
-  transition: background 0.15s ease;
-}
-
-.civic-news-content-track:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-[data-theme="light"] .civic-news-content-track:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
-
-.civic-news-story-item {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 0.82rem;
-  animation: fadeIn 0.3s ease;
-}
-
-.civic-news-uni-tag {
-  font-weight: 700;
-  color: #38bdf8;
-  flex-shrink: 0;
-}
-
-[data-theme="light"] .civic-news-uni-tag {
-  color: #0284c7;
-}
-
-.civic-news-verb {
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  flex-shrink: 0;
-}
-
-.civic-news-project-title {
-  font-weight: 600;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.civic-news-content-track:hover .civic-news-project-title {
-  text-decoration: underline;
-}
-
-.civic-news-cat-pill {
-  flex-shrink: 0;
-}
-
-.civic-news-sponsor-pill {
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  flex-shrink: 0;
-}
-
-[data-theme="light"] .civic-news-sponsor-pill {
-  background: #ecfdf5;
-  color: #059669;
-  border-color: #a7f3d0;
-}
-
-.civic-news-timestamp {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.civic-news-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex-shrink: 0;
-}
-
-.civic-news-ctrl-btn {
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  color: var(--text-muted);
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.civic-news-ctrl-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.civic-news-ctrl-btn.is-active {
-  color: #a855f7;
-  border-color: #a855f7;
-  background: rgba(168, 85, 247, 0.1);
-}
-
-.civic-news-index-indicator {
-  font-size: 0.7rem;
-  font-family: monospace;
-  color: var(--text-muted);
-  padding: 0 0.15rem;
-  user-select: none;
-}
-
-.civic-news-all-btn {
-  background: transparent;
-  border: none;
-  color: var(--accent-blue);
-  font-size: 0.75rem;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 0.15rem 0.4rem;
-  border-radius: 4px;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.civic-news-all-btn:hover {
-  background: rgba(147, 51, 234, 0.1);
-  text-decoration: underline;
-}
-
-/* ── All University Adoptions Modal ── */
-.civic-adoptions-modal-container {
-  width: 100%;
-  max-width: 960px;
-  max-height: 88vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  box-shadow: var(--shadow-modal);
-  overflow: hidden;
-  animation: modalScaleIn 0.2s ease-out;
-}
-
-.adoptions-search-bar {
-  padding: 0.75rem 1.25rem;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
-  position: relative;
-}
-
-.adoptions-modal-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1rem 1.25rem;
-}
-
-.adoptions-table-responsive {
-  width: 100%;
-  overflow-x: auto;
-}
-
-.adoptions-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-  text-align: left;
-}
-
-.adoptions-table th {
-  padding: 0.65rem 0.75rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.adoptions-table td {
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--border-subtle);
-  vertical-align: middle;
-}
-
-.adoptions-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-[data-theme="light"] .adoptions-table tr:hover td {
-  background: rgba(0, 0, 0, 0.02);
-}
-
-.adoption-title-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.adoption-title-text {
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1.3;
-}
-
-.adoption-sponsor-badge {
-  font-size: 0.7rem;
-  color: #10b981;
-  font-weight: 600;
-}
-
-.adoption-uni-cell {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.adoption-uni-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  background: var(--accent-blue);
-  color: #ffffff;
-  font-size: 0.7rem;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.adoption-uni-name {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.adoption-time-cell {
-  display: flex;
-  flex-direction: column;
-}
-
-.adoption-time-relative {
-  font-weight: 600;
-  color: var(--text-primary);
-  font-size: 0.8rem;
-}
-
-.adoption-time-exact {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-}
-
-.adoptions-summary-count {
-  font-size: 0.8rem;
-  color: var(--text-muted);
 }

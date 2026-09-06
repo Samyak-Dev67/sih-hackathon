@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { DarkModeToggle } from './DarkModeToggle';
-import { CivicAdoptionNewsTicker } from './CivicAdoptionNewsTicker';
 
 export function Navbar({ 
   currentUser = null, // null if not logged in
@@ -10,9 +9,7 @@ export function Navbar({
   onOpenAuth,
   onLogout,
   searchQuery = '',
-  onSearchChange,
-  onSelectProject,
-  hideNewsTicker = false
+  onSearchChange
 }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [internalQuery, setInternalQuery] = useState('');
@@ -151,13 +148,6 @@ export function Navbar({
           )}
         </div>
       </div>
-
-      {!hideNewsTicker && (
-        <CivicAdoptionNewsTicker 
-          currentUser={currentUser}
-          onSelectProject={onSelectProject}
-        />
-      )}
     </header>
   );
 }

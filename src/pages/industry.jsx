@@ -136,15 +136,6 @@ function IndustryPage() {
 
   const activeWorkspacePost = posts.find(p => String(p.id) === String(activeWorkspacePostId));
 
-  const handleSelectNewsProject = (postId) => {
-    const matchingPost = posts.find(p => String(p.id) === String(postId));
-    if (matchingPost) {
-      setSelectedPost(matchingPost);
-    } else {
-      handleOpenWorkspace(postId);
-    }
-  };
-
   return (
     <div className="app-shell">
       <Navbar 
@@ -156,7 +147,6 @@ function IndustryPage() {
         onLogout={handleLogout}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onSelectProject={handleSelectNewsProject}
       />
       <main className="app-main-viewport">
         <AuthGuard expectedRole="industry" currentAccount={account}>
