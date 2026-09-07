@@ -1676,36 +1676,6 @@ export const resolveProblem = (postId, account) => toggleProblemStatus(postId, '
 export const reopenProblem = (postId, account) => toggleProblemStatus(postId, 'Open', account);
 
 /**
- * 5. Fetch Solutions for a Problem directly from Supabase
- */
-export async function getSolutions(postId) {
-  if (!supabase) {
-    const err = new Error('Supabase client is not initialized.');
-    console.error('[Supabase Connection Error]:', err.message);
-    throw err;
-  }
-
-  const { data, error } = await supabase
-    .from('posts')
-    .select('*')
-    .eq('id', postId)
-    .single();
-
-  if (error) {
-    console.error('[Supabase SELECT Error (getSolutions)]:', error);
-    throw new Error(`Supabase getSolutions failed: ${error.message}`);
-  }
-
-  const dbSols = Array.isArray(data?.solutions)
-    ? data.solutions
-    : Array.isArray(data?.solution)
-      ? data.solution
-      : [];
-
-  return dbSols;
-}
-
-/**
  * ==============================================================================
  * UNIVERSITY WORKSPACE & ACCEPTED CHALLENGES SERVICE
  * ==============================================================================
