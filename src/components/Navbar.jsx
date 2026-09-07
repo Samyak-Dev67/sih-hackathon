@@ -36,7 +36,7 @@ export function Navbar({
   return (
     <header className="platform-navbar">
       <div className="navbar-inner-wrap">
-        {/* Left Section: Brand + Profile Info */}
+        {/* Left Section: Brand */}
         <div className="navbar-left-cluster">
           <a href="/" className="navbar-brand-group" style={{ textDecoration: 'none' }}>
             <div className="brand-logo-sq">FL</div>
@@ -45,8 +45,35 @@ export function Navbar({
               <span className="brand-sub-title">PUBLIC PROBLEM SOLVING</span>
             </div>
           </a>
+        </div>
 
-          {/* Profile Info - Positioned at Top Left */}
+        {/* Center Navigation Links */}
+        <nav className="navbar-nav-links">
+          <a 
+            href="/" 
+            className={`nav-link-btn ${activePage === 'landing' ? 'active' : ''}`}
+            style={{ textDecoration: 'none' }}
+          >
+            Home / Info
+          </a>
+
+          {/* Show ONLY the logged-in user's relevant dashboard */}
+          {currentUser && roleInfo && (
+            <a 
+              href={roleInfo.path} 
+              className={`nav-link-btn ${activePage === currentUser.role ? 'active' : ''}`}
+              style={{ textDecoration: 'none' }}
+            >
+              {roleInfo.label} Dashboard
+            </a>
+          )}
+        </nav>
+
+        {/* Right Section: Theme Toggle + Profile Pill + Login Button (if guest) */}
+        <div className="navbar-right-cluster">
+          <DarkModeToggle theme={theme} onToggle={onToggleTheme} />
+
+          {/* Profile Info - Repositioned to Right */}
           {currentUser && (
             <div className="profile-card-container">
               <div 
@@ -107,34 +134,6 @@ export function Navbar({
               )}
             </div>
           )}
-        </div>
-
-
-        {/* Center Navigation Links */}
-        <nav className="navbar-nav-links">
-          <a 
-            href="/" 
-            className={`nav-link-btn ${activePage === 'landing' ? 'active' : ''}`}
-            style={{ textDecoration: 'none' }}
-          >
-            Home / Info
-          </a>
-
-          {/* Show ONLY the logged-in user's relevant dashboard */}
-          {currentUser && roleInfo && (
-            <a 
-              href={roleInfo.path} 
-              className={`nav-link-btn ${activePage === currentUser.role ? 'active' : ''}`}
-              style={{ textDecoration: 'none' }}
-            >
-              {roleInfo.label} Dashboard
-            </a>
-          )}
-        </nav>
-
-        {/* Right Section: Theme Toggle + Login Button (if guest) */}
-        <div className="navbar-right-cluster">
-          <DarkModeToggle theme={theme} onToggle={onToggleTheme} />
 
           {!currentUser && (
             /* Guest Sign In button - When not logged in */
