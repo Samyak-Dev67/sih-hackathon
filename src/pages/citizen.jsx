@@ -137,6 +137,15 @@ function CitizenPage() {
     return updated;
   };
 
+  const handleEditComment = async (postId, commentId, updatedText) => {
+    const updated = await postService.editComment(postId, commentId, updatedText, account);
+    if (updated) {
+      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, comments: updated.comments } : p));
+      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, comments: updated.comments } : prev));
+    }
+    return updated;
+  };
+
   const handleDeleteComment = async (postId, commentId) => {
     const updated = await postService.deleteComment(postId, commentId, account);
     if (updated) {
@@ -183,6 +192,9 @@ function CitizenPage() {
           onDownvote={handleDownvote}
           onUpdateProblem={handleUpdateProblem}
           onDeleteProblem={handleDeleteProblem}
+          onAddComment={handleAddComment}
+          onEditComment={handleEditComment}
+          onDeleteComment={handleDeleteComment}
         />
       )}
     </div>

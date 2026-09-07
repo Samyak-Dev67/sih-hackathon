@@ -6,7 +6,12 @@ import {
   getPostStatus, 
   formatRelativeTime,
   getChallengeWorkspace,
-  getSolutions
+  getSolutions,
+  isCommentAuthor,
+  getPostComments,
+  addComment as apiAddComment,
+  editComment as apiEditComment,
+  deleteComment as apiDeleteComment
 } from '../services/api';
 
 export function ProblemDetailModal({ 
@@ -20,7 +25,10 @@ export function ProblemDetailModal({
   onOpenAuth,
   onAcceptChallenge,
   onFundChallenge,
-  onOpenWorkspace
+  onOpenWorkspace,
+  onAddComment,
+  onEditComment,
+  onDeleteComment
 }) {
   if (!post) return null;
 
@@ -99,6 +107,18 @@ export function ProblemDetailModal({
   });
   const [loadingSolutions, setLoadingSolutions] = useState(false);
 
+  // Comments state (Citizen Discussions)
+  const [comments, setComments] = useState(() => getPostComments(post));
+  const [newCommentText, setNewCommentText] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [commentError, setCommentError] = useState('');
+  const [commentSuccess, setCommentSuccess] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
+  const [savingCommentEdit, setSavingCommentEdit] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState(null);
+  const [isDeletingComment, setIsDeletingComment] = useState(false);
+
   // Sync state if post changes
   useEffect(() => {
     setEditTitle(post.title || '');
@@ -118,7 +138,154 @@ export function ProblemDetailModal({
     } else if (Array.isArray(post.solution)) {
       setSolutions(post.solution);
     }
+
+    setComments(getPostComments(post));
+    setNewCommentText('');
+    setCommentError('');
+    setCommentSuccess('');
+    setEditingCommentId(null);
+    setEditingCommentText('');
+    setDeletingCommentId(null);
   }, [post]);
+
+  const handleCreateComment = async (e) => {
+    e.preventDefault();
+    if (isGuest) {
+      if (onOpenAuth) onOpenAuth('login');
+      else alert('Please sign in as a citizen to post comments.');
+      return;
+    }
+    if (userRole !== 'citizen') {
+      setCommentError('Only citizen accounts are authorized to post civic comments.');
+      return;
+    }
+    if (!newCommentText.trim()) {
+      setCommentError('Comment text cannot be empty.');
+      return;
+    }
+
+    setSubmittingComment(true);
+    setCommentError('');
+    setCommentSuccess('');
+
+    try {
+      let updated = null;
+      if (onAddComment) {
+        updated = await onAddComment(id, newCommentText.trim());
+      } else {
+        updated = await apiAddComment(id, newCommentText.trim(), currentAccount);
+      }
+
+      if (updated && Array.isArray(updated.comments)) {
+        setComments(getPostComments(updated));
+      } else {
+        const tempComment = {
+          id: `comment-${Date.now()}`,
+          author_id: currentAccount?.id,
+          author_name: currentAccount?.name || currentAccount?.email?.split('@')[0] || 'Citizen',
+          author_role: 'citizen',
+          text: newCommentText.trim(),
+          created_at: new Date().toISOString()
+        };
+        setComments(prev => [...prev, tempComment]);
+      }
+      setNewCommentText('');
+      setCommentSuccess('Comment posted successfully.');
+      setTimeout(() => setCommentSuccess(''), 3500);
+    } catch (err) {
+      console.error('Failed to post comment:', err);
+      setCommentError(err.message || 'Failed to post comment.');
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleStartEditComment = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditingCommentText(comment.text || comment.comment || '');
+    setCommentError('');
+    setDeletingCommentId(null);
+  };
+
+  const handleCancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentText('');
+    setCommentError('');
+  };
+
+  const handleSaveEditComment = async (commentId) => {
+    if (!editingCommentText.trim()) {
+      setCommentError('Comment text cannot be empty.');
+      return;
+    }
+
+    setSavingCommentEdit(true);
+    setCommentError('');
+    setCommentSuccess('');
+
+    try {
+      let updated = null;
+      if (onEditComment) {
+        updated = await onEditComment(id, commentId, editingCommentText.trim());
+      } else {
+        updated = await apiEditComment(id, commentId, editingCommentText.trim(), currentAccount);
+      }
+
+      if (updated && Array.isArray(updated.comments)) {
+        setComments(getPostComments(updated));
+      } else {
+        setComments(prev => prev.map(c => (c.id === commentId ? { ...c, text: editingCommentText.trim(), updated_at: new Date().toISOString() } : c)));
+      }
+      setEditingCommentId(null);
+      setEditingCommentText('');
+      setCommentSuccess('Comment updated successfully.');
+      setTimeout(() => setCommentSuccess(''), 3500);
+    } catch (err) {
+      console.error('Failed to update comment:', err);
+      setCommentError(err.message || 'Failed to update comment.');
+    } finally {
+      setSavingCommentEdit(false);
+    }
+  };
+
+  const handleRequestDeleteComment = (commentId) => {
+    setDeletingCommentId(commentId);
+    setEditingCommentId(null);
+    setCommentError('');
+  };
+
+  const handleCancelDeleteComment = () => {
+    setDeletingCommentId(null);
+  };
+
+  const handleConfirmDeleteComment = async (commentId) => {
+    setIsDeletingComment(true);
+    setCommentError('');
+    setCommentSuccess('');
+
+    try {
+      let updated = null;
+      if (onDeleteComment) {
+        updated = await onDeleteComment(id, commentId);
+      } else {
+        updated = await apiDeleteComment(id, commentId, currentAccount);
+      }
+
+      if (updated && Array.isArray(updated.comments)) {
+        setComments(getPostComments(updated));
+      } else {
+        setComments(prev => prev.filter(c => c.id !== commentId));
+      }
+      setDeletingCommentId(null);
+      setCommentSuccess('Comment deleted successfully.');
+      setTimeout(() => setCommentSuccess(''), 3500);
+    } catch (err) {
+      console.error('Failed to delete comment:', err);
+      setCommentError(err.message || 'Failed to delete comment.');
+    } finally {
+      setIsDeletingComment(false);
+    }
+  };
 
   // Load solutions for problem ID
   useEffect(() => {
@@ -846,6 +1013,267 @@ export function ProblemDetailModal({
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Civic Discussion & Community Comments Section */}
+            <div className="detail-comments-container" style={{ marginTop: '2rem' }}>
+              <div className="comments-section-header">
+                <div className="comments-header-left">
+                  <h3>Civic Discussion & Comments</h3>
+                  <span className="comments-badge-count">{comments.length}</span>
+                </div>
+                <span className="comments-header-note">
+                  Public citizen dialogue
+                </span>
+              </div>
+
+              {/* Feedback banners */}
+              {commentError && (
+                <div className="form-error-banner" style={{ margin: '0.75rem 0' }}>
+                  {commentError}
+                </div>
+              )}
+              {commentSuccess && (
+                <div className="status-box success" style={{ margin: '0.75rem 0' }}>
+                  {commentSuccess}
+                </div>
+              )}
+
+              {/* Comment composer for citizens */}
+              {userRole === 'citizen' && !isGuest && (
+                <form onSubmit={handleCreateComment} className="comment-composer-form" style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
+                  <div className="comment-composer-box">
+                    <textarea
+                      rows={3}
+                      className="field-textarea comment-input-area"
+                      placeholder="Share your observation, local experience, or suggestion on this problem..."
+                      value={newCommentText}
+                      onChange={(e) => { setNewCommentText(e.target.value); setCommentError(''); }}
+                      disabled={submittingComment}
+                    />
+                    <div className="comment-composer-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <span className="comment-composer-author-tag" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        Posting as: <strong>{currentAccount?.name || currentAccount?.email?.split('@')[0] || 'Citizen'}</strong>
+                      </span>
+                      <button
+                        type="submit"
+                        className="btn btn-blue comment-post-btn"
+                        disabled={submittingComment || !newCommentText.trim()}
+                        style={{ fontSize: '0.85rem', padding: '0.45rem 1rem', fontWeight: 600 }}
+                      >
+                        {submittingComment ? 'Posting...' : 'Post Comment'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
+
+              {isGuest && (
+                <div className="comment-guest-prompt" style={{
+                  padding: '1rem',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid var(--border-color)',
+                  margin: '1rem 0',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem'
+                }}>
+                  <div>
+                    <strong style={{ display: 'block', fontSize: '0.9rem', marginBottom: '0.15rem' }}>
+                      Join the Civic Conversation
+                    </strong>
+                    <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                      Sign in as a citizen to comment, share local observations, and collaborate.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => onOpenAuth ? onOpenAuth('login') : null}
+                    style={{ fontSize: '0.82rem', padding: '0.35rem 0.85rem' }}
+                  >
+                    Sign In to Comment
+                  </button>
+                </div>
+              )}
+
+              {userRole !== 'citizen' && !isGuest && (
+                <div style={{
+                  padding: '0.85rem 1rem',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid var(--border-color)',
+                  fontSize: '0.82rem',
+                  color: 'var(--text-secondary)',
+                  margin: '1rem 0'
+                }}>
+                  Active role: <strong>{userRole.toUpperCase()}</strong>. Civic comments are posted by verified citizen accounts. Research teams and industry partners can contribute via solutions and milestones.
+                </div>
+              )}
+
+              {/* Comments list */}
+              {comments.length === 0 ? (
+                <div className="empty-comments-card" style={{
+                  textAlign: 'center',
+                  padding: '1.75rem 1rem',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)'
+                }}>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    No citizen comments posted yet.
+                  </p>
+                  <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                    Citizens can share ground observations, severity reports, and feedback here.
+                  </span>
+                </div>
+              ) : (
+                <div className="comments-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                  {comments.map((comment) => {
+                    const isAuthor = isCommentAuthor(comment, currentAccount);
+                    const authorName = comment.author_name || (comment.author_email ? comment.author_email.split('@')[0] : 'Citizen');
+                    const initials = authorName.substring(0, 2).toUpperCase();
+                    const isCurrentEditing = editingCommentId === comment.id;
+                    const isCurrentDeleting = deletingCommentId === comment.id;
+
+                    return (
+                      <div key={comment.id} className={`comment-bubble-card ${isAuthor ? 'is-own-comment' : ''}`}>
+                        <div className="comment-bubble-header">
+                          <div className="comment-author-block">
+                            <div className="comment-avatar-circle">{initials}</div>
+                            <div className="comment-author-meta">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                <strong className="comment-author-name">{authorName}</strong>
+                                <span className="role-badge-tag badge-citz">CITIZEN</span>
+                                {isAuthor && <span className="author-badge-you">You</span>}
+                              </div>
+                              <div className="comment-time-row">
+                                <span className="comment-time-text">{formatRelativeTime(comment.created_at)}</span>
+                                {comment.updated_at && <span className="comment-edited-indicator">(edited)</span>}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Author Actions (Edit / Delete) */}
+                          {isAuthor && !isCurrentEditing && !isCurrentDeleting && (
+                            <div className="comment-actions-group">
+                              <button
+                                type="button"
+                                className="comment-action-btn"
+                                onClick={() => handleStartEditComment(comment)}
+                                title="Edit this comment"
+                              >
+                                Edit
+                              </button>
+                              <span style={{ color: 'var(--border-color)', fontSize: '0.75rem' }}>•</span>
+                              <button
+                                type="button"
+                                className="comment-action-btn danger"
+                                onClick={() => handleRequestDeleteComment(comment.id)}
+                                title="Delete this comment"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Inline Edit Mode */}
+                        {isCurrentEditing ? (
+                          <div className="comment-inline-edit-box" style={{ marginTop: '0.75rem' }}>
+                            <textarea
+                              rows={3}
+                              className="field-textarea"
+                              value={editingCommentText}
+                              onChange={(e) => { setEditingCommentText(e.target.value); setCommentError(''); }}
+                              disabled={savingCommentEdit}
+                              style={{ width: '100%', marginBottom: '0.5rem' }}
+                            />
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                className="btn btn-outline"
+                                onClick={handleCancelEditComment}
+                                disabled={savingCommentEdit}
+                                style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-blue"
+                                onClick={() => handleSaveEditComment(comment.id)}
+                                disabled={savingCommentEdit || !editingCommentText.trim()}
+                                style={{ fontSize: '0.8rem', padding: '0.35rem 0.85rem' }}
+                              >
+                                {savingCommentEdit ? 'Saving...' : 'Save Changes'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Comment Text */}
+                            <div className="comment-text-content" style={{ marginTop: '0.5rem', fontSize: '0.9rem', lineHeight: '1.5', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
+                              {comment.text || comment.comment}
+                            </div>
+
+                            {/* Delete Confirmation Box */}
+                            {isCurrentDeleting && (
+                              <div className="comment-delete-confirm-box" style={{
+                                marginTop: '0.75rem',
+                                padding: '0.75rem 1rem',
+                                background: 'rgba(239, 68, 68, 0.08)',
+                                border: '1px solid rgba(239, 68, 68, 0.25)',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                gap: '0.5rem'
+                              }}>
+                                <span style={{ fontSize: '0.82rem', color: '#ef4444', fontWeight: 600 }}>
+                                  Delete your comment permanently?
+                                </span>
+                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline"
+                                    onClick={handleCancelDeleteComment}
+                                    disabled={isDeletingComment}
+                                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-danger-action"
+                                    onClick={() => handleConfirmDeleteComment(comment.id)}
+                                    disabled={isDeletingComment}
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      padding: '0.25rem 0.75rem',
+                                      background: '#ef4444',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: isDeletingComment ? 'not-allowed' : 'pointer'
+                                    }}
+                                  >
+                                    {isDeletingComment ? 'Deleting...' : 'Delete'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

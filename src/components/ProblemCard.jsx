@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { isPostAuthor, getPostAuthorInfo, getPostStatus, formatRelativeTime, getChallengeWorkspace } from '../services/api';
+import { isPostAuthor, getPostAuthorInfo, getPostStatus, formatRelativeTime, getChallengeWorkspace, getPostComments } from '../services/api';
 
 export function ProblemCard({ 
   post, 
@@ -228,6 +228,14 @@ export function ProblemCard({
             <span className="tag-pill">ID #{id}</span>
             <span className="tag-pill">Score: {score}</span>
             {isCompleted && <span className="tag-pill resolved-tag">Completed</span>}
+            {getPostComments(post).length > 0 && (
+              <span className="tag-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                {getPostComments(post).length} {getPostComments(post).length === 1 ? 'comment' : 'comments'}
+              </span>
+            )}
             {acceptedClaim?.fundedByIndustry && (
               <span className="tag-pill" style={{ background: 'rgba(129, 140, 248, 0.12)', color: '#818cf8', border: '1px solid rgba(129, 140, 248, 0.3)', fontWeight: 600 }}>
                 Funded by {acceptedClaim.fundedByIndustry.name}

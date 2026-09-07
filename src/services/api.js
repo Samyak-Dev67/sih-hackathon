@@ -349,6 +349,14 @@ export function isCommentAuthor(comment, currentAccount) {
 }
 
 /**
+ * Extract actual user comments from a post (excluding internal __meta objects)
+ */
+export function getPostComments(post) {
+  if (!post || !Array.isArray(post.comments)) return [];
+  return post.comments.filter(c => c && typeof c === 'object' && !c.__meta && (c.text || c.comment));
+}
+
+/**
  * Format timestamp into human-readable relative time (e.g., "12s ago", "5m ago", "2h ago", "3d ago").
  */
 export function formatRelativeTime(dateStr) {
@@ -841,7 +849,7 @@ export async function uploadImageAndUpdatePost(postId, file, updatedFields = {})
 export async function addComment(postId, commentData, currentAccount) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
@@ -868,7 +876,7 @@ export async function addComment(postId, commentData, currentAccount) {
     created_at: new Date().toISOString()
   };
 
-  console.log(`📡 [Supabase UPDATE]: Adding citizen comment to post #${postId}...`, commentPayload);
+  console.log(`[Supabase UPDATE]: Adding citizen comment to post #${postId}...`, commentPayload);
 
   // 1. Fetch current post
   const { data: post, error: fetchError } = await supabase
@@ -878,7 +886,7 @@ export async function addComment(postId, commentData, currentAccount) {
     .single();
 
   if (fetchError) {
-    console.error('❌ [Supabase SELECT Error (addComment)]:', fetchError);
+    console.error('[Supabase SELECT Error (addComment)]:', fetchError);
     throw new Error(`Failed to fetch post #${postId}: ${fetchError.message}`);
   }
 
@@ -893,29 +901,34 @@ export async function addComment(postId, commentData, currentAccount) {
     .select();
 
   if (error) {
-    console.error('❌ [Supabase UPDATE Error (addComment)]:', error);
+    console.error('[Supabase UPDATE Error (addComment)]:', error);
     if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts.comments".');
+      console.error('[RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts.comments".');
     }
     throw new Error(`Supabase failed to add comment: ${error.message} (code: ${error.code})`);
   }
 
   const updatedRecord = data && data.length > 0 ? data[0] : { ...post, comments: updatedComments };
-  console.log(`✅ [Supabase UPDATE Success]: Comment added to post #${postId}:`, updatedRecord);
-  return updatedRecord;
+  console.log(`[Supabase UPDATE Success]: Comment added to post #${postId}:`, updatedRecord);
+  return formatPostRow(updatedRecord);
 }
 
 /**
- * Delete a Comment from a Post in Supabase (Comment Author Only)
+ * Edit a Comment in Supabase (Comment Author Only)
  */
-export async function deleteComment(postId, commentId, currentAccount) {
+export async function editComment(postId, commentId, updatedText, currentAccount) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  console.log(`📡 [Supabase UPDATE]: Deleting comment #${commentId} from post #${postId}...`);
+  const text = typeof updatedText === 'string' ? updatedText.trim() : (updatedText?.text || '').trim();
+  if (!text) {
+    throw new Error('Comment text cannot be empty.');
+  }
+
+  console.log(`[Supabase UPDATE]: Editing comment #${commentId} on post #${postId}...`);
 
   const { data: post, error: fetchError } = await supabase
     .from('posts')
@@ -924,6 +937,7 @@ export async function deleteComment(postId, commentId, currentAccount) {
     .single();
 
   if (fetchError) {
+    console.error('[Supabase SELECT Error (editComment)]:', fetchError);
     throw new Error(`Failed to fetch post #${postId}: ${fetchError.message}`);
   }
 
@@ -931,8 +945,70 @@ export async function deleteComment(postId, commentId, currentAccount) {
   const targetComment = existingComments.find(c => c && c.id === commentId);
 
   if (!targetComment) {
-    console.warn(`⚠️ Comment #${commentId} not found in post #${postId}`);
-    return post;
+    console.warn(`Comment #${commentId} not found in post #${postId}`);
+    return formatPostRow(post);
+  }
+
+  if (currentAccount && !isCommentAuthor(targetComment, currentAccount)) {
+    throw new Error('Unauthorized: You can only edit comments that you posted.');
+  }
+
+  const updatedComments = existingComments.map(c => {
+    if (c && c.id === commentId) {
+      return {
+        ...c,
+        text,
+        updated_at: new Date().toISOString()
+      };
+    }
+    return c;
+  });
+
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ comments: updatedComments })
+    .eq('id', postId)
+    .select();
+
+  if (error) {
+    console.error('[Supabase UPDATE Error (editComment)]:', error);
+    throw new Error(`Supabase failed to update comment: ${error.message}`);
+  }
+
+  const updatedRecord = data && data.length > 0 ? data[0] : { ...post, comments: updatedComments };
+  console.log(`[Supabase UPDATE Success]: Comment #${commentId} updated on post #${postId}:`, updatedRecord);
+  return formatPostRow(updatedRecord);
+}
+
+/**
+ * Delete a Comment from a Post in Supabase (Comment Author Only)
+ */
+export async function deleteComment(postId, commentId, currentAccount) {
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('[Supabase Connection Error]:', err.message);
+    throw err;
+  }
+
+  console.log(`[Supabase UPDATE]: Deleting comment #${commentId} from post #${postId}...`);
+
+  const { data: post, error: fetchError } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('id', postId)
+    .single();
+
+  if (fetchError) {
+    console.error('[Supabase SELECT Error (deleteComment)]:', fetchError);
+    throw new Error(`Failed to fetch post #${postId}: ${fetchError.message}`);
+  }
+
+  const existingComments = Array.isArray(post.comments) ? post.comments : [];
+  const targetComment = existingComments.find(c => c && c.id === commentId);
+
+  if (!targetComment) {
+    console.warn(`Comment #${commentId} not found in post #${postId}`);
+    return formatPostRow(post);
   }
 
   if (currentAccount && !isCommentAuthor(targetComment, currentAccount)) {
@@ -948,10 +1024,13 @@ export async function deleteComment(postId, commentId, currentAccount) {
     .select();
 
   if (error) {
+    console.error('[Supabase UPDATE Error (deleteComment)]:', error);
     throw new Error(`Supabase failed to delete comment: ${error.message}`);
   }
 
-  return data && data.length > 0 ? data[0] : { ...post, comments: updatedComments };
+  const updatedRecord = data && data.length > 0 ? data[0] : { ...post, comments: updatedComments };
+  console.log(`[Supabase UPDATE Success]: Comment #${commentId} deleted from post #${postId}:`, updatedRecord);
+  return formatPostRow(updatedRecord);
 }
 
 /**
@@ -967,7 +1046,7 @@ export async function deleteComment(postId, commentId, currentAccount) {
 export async function voteProblem(postId, accountId = 'default-account', direction = 'up') {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
@@ -989,7 +1068,7 @@ export async function voteProblem(postId, accountId = 'default-account', directi
     voterId = 'anonymous-user';
   }
 
-  console.log(`📡 [Supabase UPDATE]: Processing ${direction}vote on post #${targetId} for user "${voterId}"...`);
+  console.log(`[Supabase UPDATE]: Processing ${direction}vote on post #${targetId} for user "${voterId}"...`);
 
   // 1. Fetch current post from Supabase
   let { data: post, error: fetchError } = await supabase
@@ -1008,12 +1087,12 @@ export async function voteProblem(postId, accountId = 'default-account', directi
   }
 
   if (fetchError) {
-    console.error(`❌ [Supabase SELECT Error (voteProblem ${direction})]:`, fetchError);
+    console.error(`[Supabase SELECT Error (voteProblem ${direction})]:`, fetchError);
     throw new Error(`Supabase failed to read post for vote: ${fetchError.message}`);
   }
 
   if (!post) {
-    console.error(`❌ Post #${postId} not found in Supabase "posts" table.`);
+    console.error(`Post #${postId} not found in Supabase "posts" table.`);
     throw new Error(`Post #${postId} was not found in the backend database.`);
   }
 
@@ -1047,20 +1126,20 @@ export async function voteProblem(postId, accountId = 'default-account', directi
   if (direction === 'up') {
     if (hasLiked) {
       // Toggle off: remove upvote
-      console.log(`ℹ️ [Vote]: User ${voterId} already upvoted post #${exactDbId}. Toggling off upvote.`);
+      console.log(`[Vote]: User ${voterId} already upvoted post #${exactDbId}. Toggling off upvote.`);
       likedBy = likedBy.filter(id => id !== voterId);
       newScore = currentScore - 1;
       scoreDelta = -1;
     } else if (hasDownvoted) {
       // Switch from downvote to upvote (+2 net)
-      console.log(`ℹ️ [Vote]: User ${voterId} switching from downvote to upvote on post #${exactDbId}.`);
+      console.log(`[Vote]: User ${voterId} switching from downvote to upvote on post #${exactDbId}.`);
       downvotedBy = downvotedBy.filter(id => id !== voterId);
       likedBy.push(voterId);
       newScore = currentScore + 2;
       scoreDelta = 2;
     } else {
       // First-time upvote (+1)
-      console.log(`ℹ️ [Vote]: User ${voterId} upvoting post #${exactDbId}.`);
+      console.log(`[Vote]: User ${voterId} upvoting post #${exactDbId}.`);
       likedBy.push(voterId);
       newScore = currentScore + 1;
       scoreDelta = 1;
@@ -1068,20 +1147,20 @@ export async function voteProblem(postId, accountId = 'default-account', directi
   } else if (direction === 'down') {
     if (hasDownvoted) {
       // Toggle off: remove downvote
-      console.log(`ℹ️ [Vote]: User ${voterId} already downvoted post #${exactDbId}. Toggling off downvote.`);
+      console.log(`[Vote]: User ${voterId} already downvoted post #${exactDbId}. Toggling off downvote.`);
       downvotedBy = downvotedBy.filter(id => id !== voterId);
       newScore = currentScore + 1;
       scoreDelta = 1;
     } else if (hasLiked) {
       // Switch from upvote to downvote (-2 net)
-      console.log(`ℹ️ [Vote]: User ${voterId} switching from upvote to downvote on post #${exactDbId}.`);
+      console.log(`[Vote]: User ${voterId} switching from upvote to downvote on post #${exactDbId}.`);
       likedBy = likedBy.filter(id => id !== voterId);
       downvotedBy.push(voterId);
       newScore = currentScore - 2;
       scoreDelta = -2;
     } else {
       // First-time downvote (-1)
-      console.log(`ℹ️ [Vote]: User ${voterId} downvoting post #${exactDbId}.`);
+      console.log(`[Vote]: User ${voterId} downvoting post #${exactDbId}.`);
       downvotedBy.push(voterId);
       newScore = currentScore - 1;
       scoreDelta = -1;
@@ -1109,7 +1188,7 @@ export async function voteProblem(postId, accountId = 'default-account', directi
       p_direction: direction
     });
     if (!rpcError && rpcData) {
-      console.log(`✅ [Supabase RPC Success]: vote_post executed for #${exactDbId}`);
+      console.log(`[Supabase RPC Success]: vote_post executed for #${exactDbId}`);
       updatedRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
     }
   } catch (_) {}
@@ -1133,7 +1212,7 @@ export async function voteProblem(postId, accountId = 'default-account', directi
       payload.downvoted_by = downvotedBy;
     }
 
-    console.log(`📡 [Supabase UPDATE]: Updating post #${exactDbId} score in backend database:`, payload);
+    console.log(`[Supabase UPDATE]: Updating post #${exactDbId} score in backend database:`, payload);
 
     let res = await supabase
       .from('posts')
@@ -1143,7 +1222,7 @@ export async function voteProblem(postId, accountId = 'default-account', directi
 
     // Fallback A: If update failed due to extra column (PGRST204), try with { score, comments }
     if (res.error && (res.error.code === 'PGRST204' || res.error.message?.includes('column'))) {
-      console.warn('⚠️ Column mismatch on vote update, retrying with { score, comments }...');
+      console.warn('Column mismatch on vote update, retrying with { score, comments }...');
       res = await supabase
         .from('posts')
         .update({ score: newScore, comments: existingComments })
@@ -1153,7 +1232,7 @@ export async function voteProblem(postId, accountId = 'default-account', directi
 
     // Fallback B: If comments failed or schema only has score, try { score } only
     if (res.error && (res.error.code === 'PGRST204' || res.error.message?.includes('column'))) {
-      console.warn('⚠️ Retrying vote update with { score } only...');
+      console.warn('Retrying vote update with { score } only...');
       res = await supabase
         .from('posts')
         .update({ score: newScore })
@@ -1163,7 +1242,7 @@ export async function voteProblem(postId, accountId = 'default-account', directi
 
     // Fallback C: If column is named likes
     if (res.error && res.error.message?.includes('score')) {
-      console.warn('⚠️ Retrying vote update with { likes } column...');
+      console.warn('Retrying vote update with { likes } column...');
       res = await supabase
         .from('posts')
         .update({ likes: newScore })
@@ -1173,21 +1252,21 @@ export async function voteProblem(postId, accountId = 'default-account', directi
 
     // Check for explicit RLS error
     if (res.error && res.error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501).');
-      console.error('👉 Fix: Go to Supabase Dashboard > Authentication > Policies, and add an UPDATE policy on "posts".');
+      console.error('[RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts" table (code 42501).');
+      console.error('Fix: Go to Supabase Dashboard > Authentication > Policies, and add an UPDATE policy on "posts".');
       throw new Error(`Supabase RLS policy blocked updating score: ${res.error.message}. Please enable UPDATE policy for the "posts" table in Supabase.`);
     }
 
     if (res.error) {
-      console.error(`❌ [Supabase UPDATE Error (voteProblem)]`, res.error);
+      console.error(`[Supabase UPDATE Error (voteProblem)]`, res.error);
       throw new Error(`Supabase vote failed: ${res.error.message}`);
     }
 
     // Check if 0 rows were updated (silent RLS block where USING clause filters out the row)
     if (!res.data || res.data.length === 0) {
-      console.warn(`⚠️ [Supabase RLS Blocked]: UPDATE returned 0 rows for post #${exactDbId}.`);
-      console.warn(`👉 Row-Level Security on the "posts" table prevented non-authors or anon users from updating the score.`);
-      console.warn(`👉 To fix in Supabase SQL Editor:`);
+      console.warn(`[Supabase RLS Blocked]: UPDATE returned 0 rows for post #${exactDbId}.`);
+      console.warn(`Row-Level Security on the "posts" table prevented non-authors or anon users from updating the score.`);
+      console.warn(`To fix in Supabase SQL Editor:`);
       console.warn(`   CREATE POLICY "Allow public update on posts" ON "public"."posts" FOR UPDATE USING (true) WITH CHECK (true);`);
 
       // Keep local state responsive while recording the new score
@@ -1199,7 +1278,7 @@ export async function voteProblem(postId, accountId = 'default-account', directi
         downvoted_by: downvotedBy
       };
     } else {
-      console.log(`✅ [Supabase UPDATE Success]: Post #${exactDbId} score updated to ${newScore} in backend database.`);
+      console.log(`[Supabase UPDATE Success]: Post #${exactDbId} score updated to ${newScore} in backend database.`);
       updatedRow = res.data[0];
     }
   }
@@ -1415,11 +1494,11 @@ export async function deleteSolution(postId, solutionId, currentAccount) {
 export async function toggleProblemStatus(postId, targetStatus, currentAccount) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  console.log(`📡 [Supabase SELECT]: Fetching problem #${postId} to check status...`);
+  console.log(`[Supabase SELECT]: Fetching problem #${postId} to check status...`);
   const { data: postRecord, error: fetchErr } = await supabase
     .from('posts')
     .select('*')
@@ -1427,7 +1506,7 @@ export async function toggleProblemStatus(postId, targetStatus, currentAccount) 
     .single();
 
   if (fetchErr) {
-    console.error('❌ [Supabase SELECT Error (toggleProblemStatus)]:', fetchErr);
+    console.error('[Supabase SELECT Error (toggleProblemStatus)]:', fetchErr);
     throw new Error(`Failed to fetch problem #${postId}: ${fetchErr.message}`);
   }
 
@@ -1439,7 +1518,7 @@ export async function toggleProblemStatus(postId, targetStatus, currentAccount) 
     newResolvedBool = false;
   }
 
-  console.log(`📡 [Supabase UPDATE]: Updating post #${postId} -> resolved: ${newResolvedBool}...`);
+  console.log(`[Supabase UPDATE]: Updating post #${postId} -> resolved: ${newResolvedBool}...`);
 
   let data = null;
   let error = null;
@@ -1454,7 +1533,7 @@ export async function toggleProblemStatus(postId, targetStatus, currentAccount) 
     data = res.data;
   } else if (res.error.code === 'PGRST204') {
     // If 'resolved' column does not exist in DB, fallback to storing status in comments metadata
-    console.warn(`⚠️ [Supabase Schema]: 'resolved' column not found in 'posts' table. Storing status in comments metadata...`);
+    console.warn(`[Supabase Schema]: 'resolved' column not found in 'posts' table. Storing status in comments metadata...`);
     const existingComments = Array.isArray(postRecord.comments) ? [...postRecord.comments] : [];
     let metaIdx = existingComments.findIndex(c => c && typeof c === 'object' && c.__meta);
     if (metaIdx >= 0) {
@@ -2623,8 +2702,10 @@ export const postService = {
   getPostStatus,
   toggleProblemStatus,
   addComment,
+  editComment,
   deleteComment,
   isCommentAuthor,
+  getPostComments,
   formatRelativeTime,
   voteProblem,
   votePost: voteProblem,
