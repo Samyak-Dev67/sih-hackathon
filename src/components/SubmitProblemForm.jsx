@@ -109,7 +109,7 @@ export function SubmitProblemForm({ onSubmitProblem, onCancel }) {
               }}
             />
             <small style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '0.25rem', display: 'block' }}>
-              Uploads directly to Supabase Storage (<code style={{ fontSize: '0.75rem' }}>post-images</code>). Or specify an Image URL below:
+              Uploads directly to Supabase Storage (<code style={{ fontSize: '0.75rem' }}>images</code>). Or specify an Image URL below:
             </small>
             <input 
               type="url"

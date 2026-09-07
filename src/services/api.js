@@ -713,7 +713,7 @@ export async function deletePost(postId) {
 export const deleteProblem = deletePost;
 
 /**
- * Upload Image to Supabase Storage ('post-images') and Create Post
+ * Upload Image to Supabase Storage ('images' / 'IMAGES') and Create Post
  */
 export async function uploadImageAndCreatePost(file, postData = {}) {
   if (!supabase) {
@@ -725,25 +725,42 @@ export async function uploadImageAndCreatePost(file, postData = {}) {
   let imageUrl = postData.img || '';
 
   if (file) {
-    console.log('[Supabase Storage]: Uploading file to bucket "post-images"...', file.name);
+    console.log('[Supabase Storage]: Uploading file to bucket "images"...', file.name);
     const fileExt = file.name ? file.name.split('.').pop() : 'png';
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
     const filePath = `public/${fileName}`;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('post-images')
-      .upload(filePath, file);
+    // Support both 'images' and 'IMAGES' bucket naming
+    const candidateBuckets = ['images', 'IMAGES'];
+    let uploadedBucket = null;
+    let uploadError = null;
 
-    if (uploadError) {
-      console.error('[Supabase Storage Error]: Failed to upload to "post-images" bucket:', {
-        message: uploadError.message
+    for (const b of candidateBuckets) {
+      const { data, error } = await supabase.storage
+        .from(b)
+        .upload(filePath, file);
+
+      if (!error) {
+        uploadedBucket = b;
+        uploadError = null;
+        break;
+      }
+      uploadError = error;
+      if (error.message && !error.message.toLowerCase().includes('bucket not found')) {
+        break;
+      }
+    }
+
+    if (uploadError || !uploadedBucket) {
+      console.error('[Supabase Storage Error]: Failed to upload to images bucket:', {
+        message: uploadError?.message
       });
-      console.error('Ensure bucket "post-images" exists in Supabase Storage and has public upload policies.');
-      throw new Error(`Supabase Storage upload failed: ${uploadError.message}`);
+      console.error('Ensure bucket "images" exists in Supabase Storage and has public upload policies.');
+      throw new Error(`Supabase Storage upload failed: ${uploadError?.message || 'Bucket not found'}`);
     }
 
     const { data: urlData } = supabase.storage
-      .from('post-images')
+      .from(uploadedBucket)
       .getPublicUrl(filePath);
 
     if (urlData?.publicUrl) {
@@ -759,7 +776,7 @@ export async function uploadImageAndCreatePost(file, postData = {}) {
 }
 
 /**
- * Upload Image to Supabase Storage ('post-images') and Update Existing Post
+ * Upload Image to Supabase Storage ('images' / 'IMAGES') and Update Existing Post
  */
 export async function uploadImageAndUpdatePost(postId, file, updatedFields = {}) {
   if (!supabase) {
@@ -776,17 +793,34 @@ export async function uploadImageAndUpdatePost(postId, file, updatedFields = {})
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
     const filePath = `public/${fileName}`;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('post-images')
-      .upload(filePath, file);
+    // Support both 'images' and 'IMAGES' bucket naming
+    const candidateBuckets = ['images', 'IMAGES'];
+    let uploadedBucket = null;
+    let uploadError = null;
 
-    if (uploadError) {
-      console.error('[Supabase Storage Error]: Failed to upload image:', uploadError.message);
-      throw new Error(`Supabase Storage upload failed: ${uploadError.message}`);
+    for (const b of candidateBuckets) {
+      const { data, error } = await supabase.storage
+        .from(b)
+        .upload(filePath, file);
+
+      if (!error) {
+        uploadedBucket = b;
+        uploadError = null;
+        break;
+      }
+      uploadError = error;
+      if (error.message && !error.message.toLowerCase().includes('bucket not found')) {
+        break;
+      }
+    }
+
+    if (uploadError || !uploadedBucket) {
+      console.error('[Supabase Storage Error]: Failed to upload image:', uploadError?.message);
+      throw new Error(`Supabase Storage upload failed: ${uploadError?.message || 'Bucket not found'}`);
     }
 
     const { data: urlData } = supabase.storage
-      .from('post-images')
+      .from(uploadedBucket)
       .getPublicUrl(filePath);
 
     if (urlData?.publicUrl) {
