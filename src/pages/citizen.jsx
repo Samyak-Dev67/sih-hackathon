@@ -111,23 +111,6 @@ function CitizenPage() {
     }
   };
 
-  const handleSubmitSolution = async (postId, solData) => {
-    const updated = await postService.submitSolution(postId, solData);
-    if (updated) {
-      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, solutions: updated.solutions, solution: updated.solutions } : p));
-      if (selectedPost && String(selectedPost.id) === String(postId)) setSelectedPost(updated);
-    }
-  };
-
-  const handleDeleteSolution = async (postId, solutionId) => {
-    const updated = await postService.deleteSolution(postId, solutionId, account);
-    if (updated) {
-      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, solutions: updated.solutions, solution: updated.solutions } : p));
-      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, solutions: updated.solutions, solution: updated.solutions } : prev));
-    }
-    return updated;
-  };
-
   const handleAddComment = async (postId, commentData) => {
     const updated = await postService.addComment(postId, commentData, account);
     if (updated) {

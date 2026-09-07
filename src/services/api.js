@@ -1333,53 +1333,48 @@ export async function downvoteProblem(postId, accountId = 'default-account') {
 }
 
 /**
- * 4. Submit a Solution to Supabase
- * Appends the solution object to the `solutions` JSON column in the Supabase `posts` table.
- * Caches locally so solutions remain immediately visible.
+ * Helper to check if current account is the author of a research update
  */
-export async function submitSolution(postId, { title, desc, proposed_approach, author_id, author_email, author_name, author_role }) {
+export function isUpdateAuthor(update, currentAccount) {
+  if (!update || !currentAccount) return false;
+  if (currentAccount.role !== 'university') return false;
+  if (update.university_id && currentAccount.id && String(update.university_id) === String(currentAccount.id)) return true;
+  if (update.author_id && currentAccount.id && String(update.author_id) === String(currentAccount.id)) return true;
+  if (update.university_name && currentAccount.name && update.university_name.trim().toLowerCase() === currentAccount.name.trim().toLowerCase()) return true;
+  return false;
+}
+
+/**
+ * Extract genuine research updates from a post
+ */
+export function getPostUpdates(post) {
+  if (!post || !Array.isArray(post.updates)) return [];
+  return post.updates.filter(u => u && typeof u === 'object' && (u.message || u.text || u.desc || u.title));
+}
+
+/**
+ * 4. Add a Research Update to a Post in Supabase (Accepted University Only)
+ * Persists directly into Supabase posts.updates (_json)
+ */
+export async function addPostUpdate(postId, updateData, currentAccount) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
     console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  // Derive author details
-  let resolvedAuthorId = author_id || null;
-  let resolvedAuthorEmail = author_email || null;
-  let resolvedAuthorName = author_name;
-  let resolvedAuthorRole = author_role || 'university';
+  // Strictly validate university role
+  const role = currentAccount?.role || updateData?.author_role;
+  if (role !== 'university') {
+    throw new Error('Unauthorized: Only verified university accounts are authorized to post research updates.');
+  }
 
-  try {
-    const saved = localStorage.getItem('fl_active_account');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (!resolvedAuthorId && parsed.id) resolvedAuthorId = parsed.id;
-      if (!resolvedAuthorEmail && parsed.email) resolvedAuthorEmail = parsed.email;
-      if (!resolvedAuthorName) {
-        resolvedAuthorName = parsed.name || (parsed.email ? parsed.email.split('@')[0] : null);
-      }
-      if (parsed.role) resolvedAuthorRole = parsed.role;
-    }
-  } catch (e) {}
+  const messageText = typeof updateData === 'string' ? updateData.trim() : (updateData?.message || updateData?.text || updateData?.desc || '').trim();
+  if (!messageText) {
+    throw new Error('Update message cannot be empty.');
+  }
 
-  if (!resolvedAuthorName) resolvedAuthorName = 'Academic / Enterprise Partner';
-
-  const solutionPayload = {
-    type: 'solution',
-    problem_id: postId,
-    id: `sol-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    title: (title || '').trim(),
-    desc: (desc || '').trim(),
-    proposed_approach: (proposed_approach || desc || '').trim(),
-    author_id: resolvedAuthorId,
-    author_email: resolvedAuthorEmail,
-    author_name: resolvedAuthorName,
-    author_role: resolvedAuthorRole,
-    created_at: new Date().toISOString()
-  };
-
-  console.log(`[Supabase UPDATE]: Submitting solution for post #${postId}...`, solutionPayload);
+  console.log(`[Supabase UPDATE]: Adding university research update to post #${postId}...`);
 
   // 1. Fetch current post from Supabase
   const { data: post, error: fetchErr } = await supabase
@@ -1389,17 +1384,47 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
     .single();
 
   if (fetchErr) {
-    console.error('[Supabase SELECT Error (submitSolution)]:', fetchErr);
-    throw new Error(`Failed to fetch post #${postId} before saving solution: ${fetchErr.message}`);
+    console.error('[Supabase SELECT Error (addPostUpdate)]:', fetchErr);
+    throw new Error(`Failed to fetch post #${postId}: ${fetchErr.message}`);
   }
 
-  const existingUpdates = Array.isArray(post.updates) ? post.updates : [];
-  const updatedUpdates = [
-    solutionPayload,
-    ...existingUpdates.filter(s => s && s.id !== solutionPayload.id)
-  ];
+  // 2. Verify that this problem is accepted by this university
+  const acceptedClaim = post.accepted_by;
+  if (!acceptedClaim) {
+    throw new Error('This problem has not been accepted by any university yet. A university must accept the challenge before publishing research updates.');
+  }
 
-  // 2. Update updates column in Supabase
+  const claimUniId = String(acceptedClaim.universityId || acceptedClaim.id || '');
+  const currentAccId = String(currentAccount?.id || '');
+  const claimUniName = (acceptedClaim.universityName || '').trim().toLowerCase();
+  const currentAccName = (currentAccount?.name || '').trim().toLowerCase();
+
+  const isAcceptedUni = (claimUniId && currentAccId && claimUniId === currentAccId) ||
+                        (claimUniName && currentAccName && claimUniName === currentAccName);
+
+  if (!isAcceptedUni) {
+    throw new Error(`Unauthorized: Only the university that accepted this challenge (${acceptedClaim.universityName}) can post research updates.`);
+  }
+
+  const uniDisplayName = currentAccount?.name || acceptedClaim.universityName || 'University Lead';
+  const authorDisplayName = currentAccount?.name || (currentAccount?.email ? currentAccount.email.split('@')[0] : 'University Researcher');
+
+  const updatePayload = {
+    id: `update-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    university_id: currentAccount?.id || acceptedClaim.universityId,
+    university_name: uniDisplayName,
+    author_id: currentAccount?.id || null,
+    author_email: currentAccount?.email || null,
+    author_name: authorDisplayName,
+    author_role: 'university',
+    message: messageText,
+    created_at: new Date().toISOString()
+  };
+
+  const existingUpdates = Array.isArray(post.updates) ? post.updates : [];
+  const updatedUpdates = [updatePayload, ...existingUpdates];
+
+  // 3. Update Supabase posts table
   const { data: updateResult, error: updateError } = await supabase
     .from('posts')
     .update({ updates: updatedUpdates })
@@ -1407,37 +1432,36 @@ export async function submitSolution(postId, { title, desc, proposed_approach, a
     .select();
 
   if (updateError) {
-    console.error('[Supabase UPDATE Error (submitSolution)]:', updateError);
+    console.error('[Supabase UPDATE Error (addPostUpdate)]:', updateError);
     if (updateError.code === '42501') {
       console.error('[RLS / Permission Error]: Row-Level Security blocked UPDATE on "posts.updates".');
     }
-    throw new Error(`Supabase failed to save solution: ${updateError.message} (code: ${updateError.code})`);
+    throw new Error(`Supabase failed to publish research update: ${updateError.message} (code: ${updateError.code})`);
   }
 
-  const savedRecord = updateResult && updateResult.length > 0 ? updateResult[0] : post;
+  const savedRecord = updateResult && updateResult.length > 0 ? updateResult[0] : { ...post, updates: updatedUpdates };
   const formatted = formatPostRow(savedRecord);
-  console.log(`[Supabase UPDATE Success]: Solution saved to post #${postId} in Supabase:`, formatted);
+  console.log(`[Supabase UPDATE Success]: Research update published to post #${postId}:`, formatted);
   return formatted;
 }
 
 /**
- * 4c. Delete a Solution from Supabase (Solution Author Only)
- * Removes a specific solution by id from the updates JSON column.
+ * Edit a Research Update in Supabase (Accepted University Author Only)
  */
-export async function deleteSolution(postId, solutionId, currentAccount) {
+export async function editPostUpdate(postId, updateId, updatedText, currentAccount) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
     console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  if (!postId || !solutionId) {
-    throw new Error('Problem ID and Solution ID are required to delete a solution.');
+  const messageText = typeof updatedText === 'string' ? updatedText.trim() : (updatedText?.message || updatedText?.text || '').trim();
+  if (!messageText) {
+    throw new Error('Update message cannot be empty.');
   }
 
-  console.log(`[Supabase UPDATE]: Deleting solution #${solutionId} from post #${postId}...`);
+  console.log(`[Supabase UPDATE]: Editing research update #${updateId} on post #${postId}...`);
 
-  // 1. Fetch current post from Supabase
   const { data: post, error: fetchErr } = await supabase
     .from('posts')
     .select('*')
@@ -1445,47 +1469,110 @@ export async function deleteSolution(postId, solutionId, currentAccount) {
     .single();
 
   if (fetchErr) {
-    console.error('[Supabase SELECT Error (deleteSolution)]:', fetchErr);
-    throw new Error(`Failed to fetch problem #${postId}: ${fetchErr.message}`);
+    console.error('[Supabase SELECT Error (editPostUpdate)]:', fetchErr);
+    throw new Error(`Failed to fetch post #${postId}: ${fetchErr.message}`);
   }
 
   const existingUpdates = Array.isArray(post.updates) ? post.updates : [];
-  const targetSolution = existingUpdates.find(s => s && s.id === solutionId);
+  const targetUpdate = existingUpdates.find(u => u && u.id === updateId);
 
-  if (!targetSolution) {
-    console.warn(`Solution #${solutionId} not found in post #${postId}.`);
+  if (!targetUpdate) {
+    console.warn(`Update #${updateId} not found in post #${postId}`);
     return formatPostRow(post);
   }
 
-  // Verify ownership
-  if (currentAccount && !isSolutionAuthor(targetSolution, currentAccount)) {
-    const err = new Error('Unauthorized: You can only delete solutions that you have posted.');
-    console.error('[Auth Error]:', err.message);
-    throw err;
+  if (currentAccount && !isUpdateAuthor(targetUpdate, currentAccount)) {
+    throw new Error('Unauthorized: You can only edit updates posted by your university account.');
   }
 
-  const updatedUpdates = existingUpdates.filter(s => s && s.id !== solutionId);
+  const updatedUpdates = existingUpdates.map(u => {
+    if (u && u.id === updateId) {
+      return {
+        ...u,
+        message: messageText,
+        text: messageText,
+        updated_at: new Date().toISOString()
+      };
+    }
+    return u;
+  });
 
-  // 2. Update updates in Supabase
-  const { data: updateResult, error: updateError } = await supabase
+  const { data, error } = await supabase
     .from('posts')
     .update({ updates: updatedUpdates })
     .eq('id', postId)
     .select();
 
-  if (updateError) {
-    console.error('[Supabase UPDATE Error (deleteSolution)]:', updateError);
-    if (updateError.code === '42501') {
-      console.error('[RLS / Permission Error]: Row-Level Security blocked deleting solution on "posts.updates".');
-    }
-    throw new Error(`Supabase failed to delete solution: ${updateError.message} (code: ${updateError.code})`);
+  if (error) {
+    console.error('[Supabase UPDATE Error (editPostUpdate)]:', error);
+    throw new Error(`Supabase failed to edit update: ${error.message}`);
   }
 
-  const savedRecord = updateResult && updateResult.length > 0 ? updateResult[0] : post;
-  const formatted = formatPostRow(savedRecord);
-  console.log(`[Supabase UPDATE Success]: Solution #${solutionId} successfully deleted from post #${postId}:`, formatted);
-  return formatted;
+  const savedRecord = data && data.length > 0 ? data[0] : { ...post, updates: updatedUpdates };
+  console.log(`[Supabase UPDATE Success]: Update #${updateId} modified on post #${postId}:`, savedRecord);
+  return formatPostRow(savedRecord);
 }
+
+/**
+ * Delete a Research Update from Supabase (Accepted University Author Only)
+ */
+export async function deletePostUpdate(postId, updateId, currentAccount) {
+  if (!supabase) {
+    const err = new Error('Supabase client is not initialized.');
+    console.error('[Supabase Connection Error]:', err.message);
+    throw err;
+  }
+
+  console.log(`[Supabase UPDATE]: Deleting research update #${updateId} from post #${postId}...`);
+
+  const { data: post, error: fetchErr } = await supabase
+    .from('posts')
+    .select('*')
+    .eq('id', postId)
+    .single();
+
+  if (fetchErr) {
+    console.error('[Supabase SELECT Error (deletePostUpdate)]:', fetchErr);
+    throw new Error(`Failed to fetch post #${postId}: ${fetchErr.message}`);
+  }
+
+  const existingUpdates = Array.isArray(post.updates) ? post.updates : [];
+  const targetUpdate = existingUpdates.find(u => u && u.id === updateId);
+
+  if (!targetUpdate) {
+    console.warn(`Update #${updateId} not found in post #${postId}`);
+    return formatPostRow(post);
+  }
+
+  if (currentAccount && !isUpdateAuthor(targetUpdate, currentAccount)) {
+    throw new Error('Unauthorized: You can only delete updates posted by your university account.');
+  }
+
+  const updatedUpdates = existingUpdates.filter(u => u && u.id !== updateId);
+
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ updates: updatedUpdates })
+    .eq('id', postId)
+    .select();
+
+  if (error) {
+    console.error('[Supabase UPDATE Error (deletePostUpdate)]:', error);
+    throw new Error(`Supabase failed to delete update: ${error.message}`);
+  }
+
+  const savedRecord = data && data.length > 0 ? data[0] : { ...post, updates: updatedUpdates };
+  console.log(`[Supabase UPDATE Success]: Update #${updateId} deleted from post #${postId}:`, savedRecord);
+  return formatPostRow(savedRecord);
+}
+
+// Backward-compatibility aliases
+export const submitSolution = addPostUpdate;
+export const deleteSolution = deletePostUpdate;
+export const getSolutions = async (postId) => {
+  const post = await getPostById(postId);
+  return getPostUpdates(post);
+};
 
 /**
  * 4b. Mark Problem as Resolved or Open (Citizen Author Only)
@@ -2717,6 +2804,11 @@ export const postService = {
   deleteSolution,
   getSolutions,
   isSolutionAuthor,
+  getPostUpdates,
+  addPostUpdate,
+  editPostUpdate,
+  deletePostUpdate,
+  isUpdateAuthor,
   filterProblems,
   getAcceptedChallenges,
   acceptChallenge,

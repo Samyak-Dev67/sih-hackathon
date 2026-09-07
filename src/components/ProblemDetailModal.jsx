@@ -6,12 +6,16 @@ import {
   getPostStatus, 
   formatRelativeTime,
   getChallengeWorkspace,
-  getSolutions,
   isCommentAuthor,
   getPostComments,
   addComment as apiAddComment,
   editComment as apiEditComment,
-  deleteComment as apiDeleteComment
+  deleteComment as apiDeleteComment,
+  getPostUpdates,
+  addPostUpdate as apiAddPostUpdate,
+  editPostUpdate as apiEditPostUpdate,
+  deletePostUpdate as apiDeletePostUpdate,
+  isUpdateAuthor
 } from '../services/api';
 
 export function ProblemDetailModal({ 
@@ -28,7 +32,10 @@ export function ProblemDetailModal({
   onOpenWorkspace,
   onAddComment,
   onEditComment,
-  onDeleteComment
+  onDeleteComment,
+  onAddUpdate,
+  onEditUpdate,
+  onDeleteUpdate
 }) {
   if (!post) return null;
 
@@ -99,13 +106,17 @@ export function ProblemDetailModal({
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
-  // Solutions state
-  const [solutions, setSolutions] = useState(() => {
-    if (Array.isArray(post.solutions)) return post.solutions;
-    if (Array.isArray(post.solution)) return post.solution;
-    return [];
-  });
-  const [loadingSolutions, setLoadingSolutions] = useState(false);
+  // University Updates state (Lead Research Institution Only)
+  const [updates, setUpdates] = useState(() => getPostUpdates(post));
+  const [newUpdateText, setNewUpdateText] = useState('');
+  const [submittingUpdate, setSubmittingUpdate] = useState(false);
+  const [updateError, setUpdateError] = useState('');
+  const [updateSuccess, setUpdateSuccess] = useState('');
+  const [editingUpdateId, setEditingUpdateId] = useState(null);
+  const [editingUpdateText, setEditingUpdateText] = useState('');
+  const [savingUpdateEdit, setSavingUpdateEdit] = useState(false);
+  const [deletingUpdateId, setDeletingUpdateId] = useState(null);
+  const [isDeletingUpdate, setIsDeletingUpdate] = useState(false);
 
   // Comments state (Citizen Discussions)
   const [comments, setComments] = useState(() => getPostComments(post));
@@ -133,11 +144,13 @@ export function ProblemDetailModal({
     setDeleteError('');
     setCurrentStatus(getPostStatus(post));
     
-    if (Array.isArray(post.solutions)) {
-      setSolutions(post.solutions);
-    } else if (Array.isArray(post.solution)) {
-      setSolutions(post.solution);
-    }
+    setUpdates(getPostUpdates(post));
+    setNewUpdateText('');
+    setUpdateError('');
+    setUpdateSuccess('');
+    setEditingUpdateId(null);
+    setEditingUpdateText('');
+    setDeletingUpdateId(null);
 
     setComments(getPostComments(post));
     setNewCommentText('');
@@ -287,28 +300,151 @@ export function ProblemDetailModal({
     }
   };
 
-  // Load solutions for problem ID
-  useEffect(() => {
-    let isMounted = true;
-    if (id) {
-      setLoadingSolutions(true);
-      getSolutions(id)
-        .then((sols) => {
-          if (isMounted && Array.isArray(sols)) {
-            setSolutions(sols);
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to load solutions:', err);
-        })
-        .finally(() => {
-          if (isMounted) setLoadingSolutions(false);
-        });
+  // Research Updates handlers (Only for the university that accepted the problem)
+  const isAcceptedUni = Boolean(
+    acceptedClaim && 
+    userRole === 'university' && 
+    currentAccount && 
+    (
+      String(acceptedClaim.universityId) === String(currentAccount.id) ||
+      (acceptedClaim.universityName && currentAccount.name && acceptedClaim.universityName.trim().toLowerCase() === currentAccount.name.trim().toLowerCase())
+    )
+  );
+
+  const handleCreateUpdate = async (e) => {
+    e.preventDefault();
+    if (!isAcceptedUni) {
+      setUpdateError('Only the university that accepted this problem can post updates.');
+      return;
     }
-    return () => {
-      isMounted = false;
-    };
-  }, [id]);
+    if (!newUpdateText.trim()) {
+      setUpdateError('Update text cannot be empty.');
+      return;
+    }
+
+    setSubmittingUpdate(true);
+    setUpdateError('');
+    setUpdateSuccess('');
+
+    try {
+      let updated = null;
+      if (onAddUpdate) {
+        updated = await onAddUpdate(id, newUpdateText.trim());
+      } else {
+        updated = await apiAddPostUpdate(id, newUpdateText.trim(), currentAccount);
+      }
+
+      if (updated && Array.isArray(updated.updates)) {
+        setUpdates(getPostUpdates(updated));
+      } else {
+        const tempUpdate = {
+          id: `update-${Date.now()}`,
+          university_id: currentAccount?.id,
+          university_name: acceptedClaim?.universityName || currentAccount?.name || 'University',
+          author_name: currentAccount?.name || 'Research Lead',
+          author_role: 'university',
+          message: newUpdateText.trim(),
+          created_at: new Date().toISOString()
+        };
+        setUpdates(prev => [tempUpdate, ...prev]);
+      }
+      setNewUpdateText('');
+      setUpdateSuccess('Research update published successfully.');
+      setTimeout(() => setUpdateSuccess(''), 3500);
+    } catch (err) {
+      console.error('Failed to post research update:', err);
+      setUpdateError(err.message || 'Failed to post update.');
+    } finally {
+      setSubmittingUpdate(false);
+    }
+  };
+
+  const handleStartEditUpdate = (upd) => {
+    setEditingUpdateId(upd.id);
+    setEditingUpdateText(upd.message || upd.text || upd.desc || '');
+    setUpdateError('');
+    setDeletingUpdateId(null);
+  };
+
+  const handleCancelEditUpdate = () => {
+    setEditingUpdateId(null);
+    setEditingUpdateText('');
+    setUpdateError('');
+  };
+
+  const handleSaveEditUpdate = async (updateId) => {
+    if (!editingUpdateText.trim()) {
+      setUpdateError('Update text cannot be empty.');
+      return;
+    }
+
+    setSavingUpdateEdit(true);
+    setUpdateError('');
+    setUpdateSuccess('');
+
+    try {
+      let updated = null;
+      if (onEditUpdate) {
+        updated = await onEditUpdate(id, updateId, editingUpdateText.trim());
+      } else {
+        updated = await apiEditPostUpdate(id, updateId, editingUpdateText.trim(), currentAccount);
+      }
+
+      if (updated && Array.isArray(updated.updates)) {
+        setUpdates(getPostUpdates(updated));
+      } else {
+        setUpdates(prev => prev.map(u => (u.id === updateId ? { ...u, message: editingUpdateText.trim(), updated_at: new Date().toISOString() } : u)));
+      }
+      setEditingUpdateId(null);
+      setEditingUpdateText('');
+      setUpdateSuccess('Research update edited successfully.');
+      setTimeout(() => setUpdateSuccess(''), 3500);
+    } catch (err) {
+      console.error('Failed to edit update:', err);
+      setUpdateError(err.message || 'Failed to edit update.');
+    } finally {
+      setSavingUpdateEdit(false);
+    }
+  };
+
+  const handleRequestDeleteUpdate = (updateId) => {
+    setDeletingUpdateId(updateId);
+    setEditingUpdateId(null);
+    setUpdateError('');
+  };
+
+  const handleCancelDeleteUpdate = () => {
+    setDeletingUpdateId(null);
+  };
+
+  const handleConfirmDeleteUpdate = async (updateId) => {
+    setIsDeletingUpdate(true);
+    setUpdateError('');
+    setUpdateSuccess('');
+
+    try {
+      let updated = null;
+      if (onDeleteUpdate) {
+        updated = await onDeleteUpdate(id, updateId);
+      } else {
+        updated = await apiDeletePostUpdate(id, updateId, currentAccount);
+      }
+
+      if (updated && Array.isArray(updated.updates)) {
+        setUpdates(getPostUpdates(updated));
+      } else {
+        setUpdates(prev => prev.filter(u => u.id !== updateId));
+      }
+      setDeletingUpdateId(null);
+      setUpdateSuccess('Research update deleted.');
+      setTimeout(() => setUpdateSuccess(''), 3500);
+    } catch (err) {
+      console.error('Failed to delete update:', err);
+      setUpdateError(err.message || 'Failed to delete update.');
+    } finally {
+      setIsDeletingUpdate(false);
+    }
+  };
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
@@ -964,58 +1100,239 @@ export function ProblemDetailModal({
               </div>
             )}
 
-            {/* Community Solutions & Research Evidence Section */}
-            <div className="detail-solutions-container" style={{ marginTop: '1.75rem' }}>
-              <div className="solutions-section-header">
-                <div className="solutions-header-left">
-                  <h3>Community Solutions & Notes</h3>
-                  <span className="solutions-badge-count">{solutions.length}</span>
+            {/* University Research Updates Section (Accepted University Only Can Post; All Can View) */}
+            <div className="detail-updates-container" style={{ marginTop: '1.75rem' }}>
+              <div className="updates-section-header">
+                <div className="updates-header-left">
+                  <h3>University Updates</h3>
+                  <span className="updates-badge-count">{updates.length}</span>
                 </div>
-                <span className="solutions-header-note">
-                  Public collaborative evidence
+                <span className="updates-header-note">
+                  {acceptedClaim ? `Official progress notes by ${acceptedClaim.universityName}` : 'Field reports & progress'}
                 </span>
               </div>
 
-              {loadingSolutions ? (
-                <div className="empty-solutions-card" style={{ marginTop: '0.85rem' }}>
-                  <p>Loading solutions...</p>
+              {/* Feedback messages for updates */}
+              {updateError && (
+                <div className="form-error-banner" style={{ margin: '0.75rem 0' }}>
+                  {updateError}
                 </div>
-              ) : solutions.length === 0 ? (
-                <div className="empty-solutions-card" style={{ marginTop: '0.85rem' }}>
-                  <p>No community solutions submitted yet.</p>
-                  <span className="empty-subtext">
-                    {acceptedClaim 
-                      ? `As research milestones progress with ${acceptedClaim.universityName}, prototypes and findings will be published here.`
-                      : 'Universities and partners can propose solutions once investigation begins.'}
+              )}
+              {updateSuccess && (
+                <div className="status-box success" style={{ margin: '0.75rem 0' }}>
+                  {updateSuccess}
+                </div>
+              )}
+
+              {/* University Update Composer - ONLY visible to the university that accepted the problem */}
+              {isAcceptedUni && (
+                <form onSubmit={handleCreateUpdate} className="update-composer-form" style={{ marginTop: '0.85rem', marginBottom: '1.25rem' }}>
+                  <div className="update-composer-box">
+                    <textarea
+                      rows={3}
+                      className="field-textarea update-input-area"
+                      placeholder="Post a research update, field observation, or progress milestone note for citizens and sponsors..."
+                      value={newUpdateText}
+                      onChange={(e) => { setNewUpdateText(e.target.value); setUpdateError(''); }}
+                      disabled={submittingUpdate}
+                    />
+                    <div className="update-composer-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <span className="update-composer-author-tag" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        Posting as: <strong style={{ color: 'var(--accent-blue, #3b82f6)' }}>{acceptedClaim.universityName}</strong>
+                      </span>
+                      <button
+                        type="submit"
+                        className="btn btn-blue update-post-btn"
+                        disabled={submittingUpdate || !newUpdateText.trim()}
+                        style={{ fontSize: '0.85rem', padding: '0.45rem 1.1rem', fontWeight: 600 }}
+                      >
+                        {submittingUpdate ? 'Publishing...' : 'Post Update'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
+
+              {/* Notice for other universities who did NOT accept the problem */}
+              {userRole === 'university' && acceptedClaim && !isAcceptedUni && (
+                <div style={{
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid var(--border-color)',
+                  fontSize: '0.82rem',
+                  color: 'var(--text-secondary)',
+                  margin: '0.75rem 0'
+                }}>
+                  This challenge is claimed and led by <strong>{acceptedClaim.universityName}</strong>. Only the lead university can publish research updates.
+                </div>
+              )}
+
+              {/* Updates List (Visible to all: citizens, industry, universities, guests) */}
+              {updates.length === 0 ? (
+                <div className="empty-updates-card" style={{
+                  textAlign: 'center',
+                  padding: '1.75rem 1rem',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  marginTop: '0.5rem'
+                }}>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    No university updates published yet.
+                  </p>
+                  <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                    {acceptedClaim
+                      ? `As ${acceptedClaim.universityName} advances investigation and milestones, progress reports will be posted here.`
+                      : 'Once an academic institution accepts this challenge, live research updates will appear here.'}
                   </span>
                 </div>
               ) : (
-                <div className="solutions-list" style={{ marginTop: '0.85rem' }}>
-                  {solutions.map((sol, index) => (
-                    <div key={sol.id || index} className="solution-item-card">
-                      <div className="solution-card-top">
-                        <div className="solution-org-info">
-                          <strong className="solution-org-title">{sol.author_name || 'Academic Partner'}</strong>
-                          <span className="role-badge-tag badge-uni">
-                            {(sol.author_role || 'University').toUpperCase()}
-                          </span>
+                <div className="updates-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: '0.5rem' }}>
+                  {updates.map((upd) => {
+                    const isAuthor = isUpdateAuthor(upd, currentAccount);
+                    const uniName = upd.university_name || upd.author_name || acceptedClaim?.universityName || 'Lead University';
+                    const initials = uniName.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || 'UN';
+                    const isCurrentEditing = editingUpdateId === upd.id;
+                    const isCurrentDeleting = deletingUpdateId === upd.id;
+
+                    return (
+                      <div key={upd.id} className={`update-bubble-card ${isAuthor ? 'is-own-update' : ''}`}>
+                        <div className="update-bubble-header">
+                          <div className="update-author-block">
+                            <div className="update-avatar-circle">{initials}</div>
+                            <div className="update-author-meta">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap' }}>
+                                <strong className="update-author-name">{uniName}</strong>
+                                <span className="role-badge-tag badge-uni">UNIVERSITY</span>
+                                {isAuthor && <span className="author-badge-you">Lead Lab</span>}
+                              </div>
+                              <div className="update-time-row">
+                                <span className="update-time-text">{formatRelativeTime(upd.created_at)}</span>
+                                {upd.updated_at && <span className="update-edited-indicator">(edited)</span>}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* University Actions (Edit / Delete) - Only for authoring university */}
+                          {isAuthor && !isCurrentEditing && !isCurrentDeleting && (
+                            <div className="update-actions-group">
+                              <button
+                                type="button"
+                                className="update-action-btn"
+                                onClick={() => handleStartEditUpdate(upd)}
+                                title="Edit this update"
+                              >
+                                Edit
+                              </button>
+                              <span style={{ color: 'var(--border-color)', fontSize: '0.75rem' }}>•</span>
+                              <button
+                                type="button"
+                                className="update-action-btn danger"
+                                onClick={() => handleRequestDeleteUpdate(upd.id)}
+                                title="Delete this update"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <span className="solution-timeline-pill">
-                          {formatRelativeTime(sol.created_at)}
-                        </span>
+
+                        {/* Inline Edit Form */}
+                        {isCurrentEditing ? (
+                          <div className="update-inline-edit-box" style={{ marginTop: '0.75rem' }}>
+                            <textarea
+                              rows={3}
+                              className="field-textarea"
+                              value={editingUpdateText}
+                              onChange={(e) => { setEditingUpdateText(e.target.value); setUpdateError(''); }}
+                              disabled={savingUpdateEdit}
+                              style={{ width: '100%', marginBottom: '0.5rem' }}
+                            />
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                className="btn btn-outline"
+                                onClick={handleCancelEditUpdate}
+                                disabled={savingUpdateEdit}
+                                style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-blue"
+                                onClick={() => handleSaveEditUpdate(upd.id)}
+                                disabled={savingUpdateEdit || !editingUpdateText.trim()}
+                                style={{ fontSize: '0.8rem', padding: '0.35rem 0.85rem' }}
+                              >
+                                {savingUpdateEdit ? 'Saving...' : 'Save Changes'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Update text */}
+                            <div className="update-text-content" style={{ marginTop: '0.5rem', fontSize: '0.9rem', lineHeight: '1.55', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
+                              {upd.message || upd.text || upd.desc}
+                            </div>
+
+                            {/* Delete Confirmation Box */}
+                            {isCurrentDeleting && (
+                              <div className="update-delete-confirm-box" style={{
+                                marginTop: '0.75rem',
+                                padding: '0.75rem 1rem',
+                                background: 'rgba(239, 68, 68, 0.08)',
+                                border: '1px solid rgba(239, 68, 68, 0.25)',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                gap: '0.5rem'
+                              }}>
+                                <span style={{ fontSize: '0.82rem', color: '#ef4444', fontWeight: 600 }}>
+                                  Delete this research update permanently?
+                                </span>
+                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline"
+                                    onClick={handleCancelDeleteUpdate}
+                                    disabled={isDeletingUpdate}
+                                    style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-danger-action"
+                                    onClick={() => handleConfirmDeleteUpdate(upd.id)}
+                                    disabled={isDeletingUpdate}
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      padding: '0.25rem 0.75rem',
+                                      background: '#ef4444',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      cursor: isDeletingUpdate ? 'not-allowed' : 'pointer'
+                                    }}
+                                  >
+                                    {isDeletingUpdate ? 'Deleting...' : 'Delete'}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
-                      <h4 className="solution-title">{sol.title}</h4>
-                      <p className="solution-description-text">{sol.desc || sol.proposed_approach}</p>
-                      {sol.proposed_approach && sol.proposed_approach !== sol.desc && (
-                        <div className="solution-approach-block">
-                          <strong>Proposed Approach:</strong> {sol.proposed_approach}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
+
 
             {/* Civic Discussion & Community Comments Section */}
             <div className="detail-comments-container" style={{ marginTop: '2rem' }}>

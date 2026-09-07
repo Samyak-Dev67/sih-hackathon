@@ -8405,6 +8405,225 @@ body {
 }
 
 /* ========================================================================= */
+/* UNIVERSITY RESEARCH UPDATES COMPONENT                                     */
+/* ========================================================================= */
+
+.detail-updates-container {
+  border-top: 1px solid var(--border-color);
+  padding-top: 1.5rem;
+}
+
+.updates-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.updates-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.updates-header-left h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.updates-badge-count {
+  font-size: 0.72rem;
+  font-weight: 800;
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+}
+
+.updates-header-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.update-composer-box {
+  background: var(--surface-1, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.85rem;
+  transition: border-color 0.2s ease;
+}
+
+.update-composer-box:focus-within {
+  border-color: #a855f7;
+}
+
+.update-input-area {
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+  outline: none;
+}
+
+.empty-updates-card {
+  text-align: center;
+  padding: 1.75rem 1rem;
+  background: var(--surface-1, rgba(255, 255, 255, 0.02));
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.update-bubble-card {
+  background: var(--surface-1, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1rem 1.15rem;
+  transition: all 0.15s ease;
+}
+
+.update-bubble-card.is-own-update {
+  border-color: rgba(168, 85, 247, 0.3);
+  background: rgba(168, 85, 247, 0.035);
+}
+
+.update-bubble-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.update-author-block {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.update-avatar-circle {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.update-author-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.update-author-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.role-badge-tag.badge-uni {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.author-badge-you {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.12rem 0.45rem;
+  border-radius: 4px;
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.update-time-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.update-edited-indicator {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.update-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.update-action-btn {
+  background: transparent;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.2rem 0.35rem;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.update-action-btn:hover {
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.08);
+}
+
+.update-action-btn.danger:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.update-text-content {
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+[data-theme="light"] .update-bubble-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+[data-theme="light"] .update-bubble-card.is-own-update {
+  background: #faf5ff;
+  border-color: #d8b4fe;
+}
+
+[data-theme="light"] .update-composer-box {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+
+[data-theme="light"] .empty-updates-card {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+/* ========================================================================= */
 /* CIVIC DISCUSSION & COMMENTS COMPONENT                                     */
 /* ========================================================================= */
 

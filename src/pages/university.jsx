@@ -108,6 +108,33 @@ function UniversityPage() {
     }
   };
 
+  const handleAddUpdate = async (postId, updateText) => {
+    const updated = await postService.addPostUpdate(postId, updateText, account);
+    if (updated) {
+      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, updates: updated.updates } : p));
+      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, updates: updated.updates } : prev));
+    }
+    return updated;
+  };
+
+  const handleEditUpdate = async (postId, updateId, updatedText) => {
+    const updated = await postService.editPostUpdate(postId, updateId, updatedText, account);
+    if (updated) {
+      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, updates: updated.updates } : p));
+      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, updates: updated.updates } : prev));
+    }
+    return updated;
+  };
+
+  const handleDeleteUpdate = async (postId, updateId) => {
+    const updated = await postService.deletePostUpdate(postId, updateId, account);
+    if (updated) {
+      setPosts(prev => prev.map(p => String(p.id) === String(postId) ? { ...p, ...updated, updates: updated.updates } : p));
+      setSelectedPost(prev => (prev && String(prev.id) === String(postId) ? { ...prev, ...updated, updates: updated.updates } : prev));
+    }
+    return updated;
+  };
+
   // University workspace claim handler
   const handleAcceptChallenge = (post) => {
     if (!account) return;
@@ -183,6 +210,9 @@ function UniversityPage() {
           onDeleteProblem={handleDeleteProblem}
           onAcceptChallenge={handleAcceptChallenge}
           onOpenWorkspace={handleOpenWorkspace}
+          onAddUpdate={handleAddUpdate}
+          onEditUpdate={handleEditUpdate}
+          onDeleteUpdate={handleDeleteUpdate}
         />
       )}
     </div>
