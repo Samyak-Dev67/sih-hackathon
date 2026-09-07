@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DarkModeToggle } from './DarkModeToggle';
 
 export function Navbar({ 
@@ -13,7 +13,33 @@ export function Navbar({
 }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [internalQuery, setInternalQuery] = useState('');
+  const profileMenuRef = useRef(null);
   const currentQuery = onSearchChange ? searchQuery : internalQuery;
+
+  // Close profile dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setShowProfileMenu(false);
+      }
+    }
+
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showProfileMenu]);
 
   const handleQueryChange = (val) => {
     if (onSearchChange) onSearchChange(val);
@@ -75,7 +101,7 @@ export function Navbar({
 
           {/* Profile Info - Repositioned to Right */}
           {currentUser && (
-            <div className="profile-card-container">
+            <div className="profile-card-container" ref={profileMenuRef}>
               <div 
                 className="profile-pill-card"
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
