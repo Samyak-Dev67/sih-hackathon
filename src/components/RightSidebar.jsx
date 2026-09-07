@@ -16,7 +16,7 @@ export function RightSidebar({ onSelectCategory, onSelectRoleDemo, onOpenAuth })
     <aside className="right-sidebar">
       {/* Platform Statistics Card matching reference image */}
       <div className="stats-card">
-        <h3 className="stats-card-heading">First Look</h3>
+        <h3 className="stats-card-heading">Nivaaran</h3>
         <div className="stats-grid">
           <div className="stat-item">
             <span className="stat-number">{STATS.openProblems.toLocaleString()}</span>

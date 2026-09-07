@@ -59,8 +59,8 @@ export function CivicCertificateModal({
     .replace(/[^A-Za-z0-9]/g, '')
     .toUpperCase()
     .slice(0, 4);
-  const credentialId = `FL-CIVIC-${rawId}-${probId}-2026`;
-  const verificationUrl = `https://firstlook.civic/verify/${credentialId}`;
+  const credentialId = `NV-CIVIC-${rawId}-${probId}-2026`;
+  const verificationUrl = `https://nivaaran.civic/verify/${credentialId}`;
 
   // Handle Print Action
   const handlePrint = () => {
@@ -77,7 +77,7 @@ export function CivicCertificateModal({
   // Handle Copy Formatted Credential Text
   const handleCopyText = () => {
     const text = [
-      '=== FIRST LOOK CIVIC RESEARCH CREDENTIAL ===',
+      '=== NIVAARAN CIVIC RESEARCH CREDENTIAL ===',
       `Recipient: ${student.name}`,
       `Designated Role: ${student.role || 'Student Researcher'}`,
       `Department: ${student.department || 'Engineering & Applied Sciences'}`,
@@ -222,7 +222,7 @@ export function CivicCertificateModal({
 
                     <div className="cert-header-titles">
                       <span className="cert-initiative-kicker">
-                        FIRST LOOK CIVIC INNOVATION & RESEARCH NETWORK
+                        NIVAARAN CIVIC INNOVATION & RESEARCH NETWORK
                       </span>
                       <h2 className="cert-university-title">
                         {universityName}
@@ -320,7 +320,7 @@ export function CivicCertificateModal({
                         Director of Civic Alliances
                       </div>
                       <div className="cert-signature-org">
-                        First Look Civic Tech Network
+                        Nivaaran Civic Tech Network
                       </div>
                     </div>
                   </div>

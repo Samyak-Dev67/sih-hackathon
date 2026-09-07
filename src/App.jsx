@@ -319,7 +319,7 @@ export default function App() {
         <section className="lp-cta-section">
           <div className="lp-cta-glow" aria-hidden="true" />
           <div className="lp-cta-inner reveal">
-            <h2 className="lp-cta-h">Ready to make your first look count?</h2>
+            <h2 className="lp-cta-h">Ready to make your contribution count?</h2>
             <p className="lp-cta-sub">Join citizens, universities, and industries solving real problems together.</p>
             <button className="lp-btn-primary lp-btn-lg" onClick={() => openAuthModal('signup')}>
               Get Started — It's Free <span className="lp-btn-icon">→</span>
@@ -333,11 +333,11 @@ export default function App() {
         <div className="modal-backdrop" onClick={() => setIsAuthOpen(false)}>
           <div className="modal-container auth-modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="auth-modal-top">
-              <span className="auth-modal-badge">FIRST LOOK AUTH</span>
+              <span className="auth-modal-badge">NIVAARAN AUTH</span>
               <button type="button" className="modal-close-icon-btn" onClick={() => setIsAuthOpen(false)} aria-label="Close">✕</button>
             </div>
             <div className="auth-card-header">
-              <h2>{authMode === 'login' ? 'Sign in to First Look' : 'Create an Account'}</h2>
+              <h2>{authMode === 'login' ? 'Sign in to Nivaaran' : 'Create an Account'}</h2>
               <p>Select your role to access your dedicated space</p>
             </div>
             <div className="auth-mode-toggle">

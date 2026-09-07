@@ -65,9 +65,11 @@ export function Navbar({
         {/* Left Section: Brand */}
         <div className="navbar-left-cluster">
           <a href="/" className="navbar-brand-group" style={{ textDecoration: 'none' }}>
-            <div className="brand-logo-sq">FL</div>
+            <div className="brand-logo-sq" style={{ fontSize: '1.25rem', fontWeight: 800 }}>न</div>
             <div className="brand-text-col">
-              <span className="brand-main-title">First Look</span>
+              <span className="brand-main-title">
+                <span style={{ color: 'var(--accent-cyan, #06b6d4)' }}>न</span>ivaaran
+              </span>
               <span className="brand-sub-title">PUBLIC PROBLEM SOLVING</span>
             </div>
           </a>

@@ -89,7 +89,7 @@ export function Sidebar({
           className="sidebar-footer-link" 
           onClick={(e) => { 
             e.preventDefault(); 
-            alert("First Look Guidelines:\n1. Real-World Impact: All posted problems must address genuine municipal, environmental, or industrial challenges.\n2. Cross-Sector Synergy: Submissions encourage collaborative bids across citizens, universities, and industry.\n3. Verified Outcomes: Grants and pilot implementations are audited through milestone deliverables."); 
+            alert("Nivaaran Guidelines:\n1. Real-World Impact: All posted problems must address genuine municipal, environmental, or industrial challenges.\n2. Cross-Sector Synergy: Submissions encourage collaborative bids across citizens, universities, and industry.\n3. Verified Outcomes: Grants and pilot implementations are audited through milestone deliverables."); 
           }}
         >
           <HelpCircle size={15} />

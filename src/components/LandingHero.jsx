@@ -8,7 +8,7 @@ export function LandingHero({ onExploreClick, onPostProblemClick, onSelectRoleDe
       <div className="hero-dark-banner">
         <div className="hero-decorative-accent"></div>
         <div className="hero-badge-row">
-          <span className="hero-eyebrow-tag">FIRST LOOK</span>
+          <span className="hero-eyebrow-tag">NIVAARAN</span>
         </div>
         
         <h1 className="hero-headline">

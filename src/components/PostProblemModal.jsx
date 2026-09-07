@@ -22,7 +22,7 @@ export function PostProblemModal({ isOpen, onClose, onAddProblem, currentUser })
 
     const newProblem = {
       id: 'prob-' + Date.now(),
-      code: 'FL-' + Math.floor(1000 + Math.random() * 9000),
+      code: 'NV-' + Math.floor(1000 + Math.random() * 9000),
       title: title.trim(),
       orgName: orgName.trim(),
       orgType: orgType,

@@ -116,12 +116,12 @@ export function AuthModal({ isOpen, onClose, initialMode = 'login', onAuthSucces
 
         <div className="auth-header-container">
           <div className="auth-brand-pill">
-            <div className="auth-logo-badge">FL</div>
-            <span className="auth-platform-name">First Look Platform</span>
+            <div className="auth-logo-badge">न</div>
+            <span className="auth-platform-name">Nivaaran Platform</span>
           </div>
 
           <h2 className="auth-headline">
-            {authMode === 'signup' ? 'Join the Multi-Sector Network' : 'Sign in to First Look'}
+            {authMode === 'signup' ? 'Join the Multi-Sector Network' : 'Sign in to Nivaaran'}
           </h2>
           <p className="auth-subtext">
             Connecting Citizens, Universities, and Industries to solve national & local challenges.
