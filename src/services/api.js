@@ -681,11 +681,11 @@ export const updateProblem = updatePost;
 export async function deletePost(postId) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
-  console.log(`📡 [Supabase DELETE]: Deleting post #${postId}...`);
+  console.log(`[Supabase DELETE]: Deleting post #${postId}...`);
 
   const { data, error } = await supabase
     .from('posts')
@@ -694,19 +694,19 @@ export async function deletePost(postId) {
     .select();
 
   if (error) {
-    console.error('❌ [Supabase DELETE Error]:', {
+    console.error('[Supabase DELETE Error]:', {
       message: error.message,
       code: error.code,
       details: error.details,
       hint: error.hint
     });
     if (error.code === '42501') {
-      console.error('🚨 [RLS / Permission Error]: Row-Level Security blocked DELETE on "posts" table (code 42501). Check RLS DELETE policy in Supabase.');
+      console.error('[RLS / Permission Error]: Row-Level Security blocked DELETE on "posts" table (code 42501). Check RLS DELETE policy in Supabase.');
     }
     throw new Error(`Supabase DELETE failed: ${error.message} (code: ${error.code})`);
   }
 
-  console.log(`✅ [Supabase DELETE Success]: Post #${postId} removed from Supabase.`);
+  console.log(`[Supabase DELETE Success]: Post #${postId} removed from Supabase.`);
   return { success: true, id: postId, data };
 }
 
@@ -718,14 +718,14 @@ export const deleteProblem = deletePost;
 export async function uploadImageAndCreatePost(file, postData = {}) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
   let imageUrl = postData.img || '';
 
   if (file) {
-    console.log('📡 [Supabase Storage]: Uploading file to bucket "post-images"...', file.name);
+    console.log('[Supabase Storage]: Uploading file to bucket "post-images"...', file.name);
     const fileExt = file.name ? file.name.split('.').pop() : 'png';
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
     const filePath = `public/${fileName}`;
@@ -735,10 +735,10 @@ export async function uploadImageAndCreatePost(file, postData = {}) {
       .upload(filePath, file);
 
     if (uploadError) {
-      console.error('❌ [Supabase Storage Error]: Failed to upload to "post-images" bucket:', {
+      console.error('[Supabase Storage Error]: Failed to upload to "post-images" bucket:', {
         message: uploadError.message
       });
-      console.error('👉 Ensure bucket "post-images" exists in Supabase Storage and has public upload policies.');
+      console.error('Ensure bucket "post-images" exists in Supabase Storage and has public upload policies.');
       throw new Error(`Supabase Storage upload failed: ${uploadError.message}`);
     }
 
@@ -748,7 +748,7 @@ export async function uploadImageAndCreatePost(file, postData = {}) {
 
     if (urlData?.publicUrl) {
       imageUrl = urlData.publicUrl;
-      console.log('✅ [Supabase Storage Success]: Public image URL generated:', imageUrl);
+      console.log('[Supabase Storage Success]: Public image URL generated:', imageUrl);
     }
   }
 
@@ -764,14 +764,14 @@ export async function uploadImageAndCreatePost(file, postData = {}) {
 export async function uploadImageAndUpdatePost(postId, file, updatedFields = {}) {
   if (!supabase) {
     const err = new Error('Supabase client is not initialized.');
-    console.error('❌ [Supabase Connection Error]:', err.message);
+    console.error('[Supabase Connection Error]:', err.message);
     throw err;
   }
 
   let imageUrl = updatedFields.img || '';
 
   if (file) {
-    console.log(`📡 [Supabase Storage]: Uploading new image for post #${postId}...`, file.name);
+    console.log(`[Supabase Storage]: Uploading new image for post #${postId}...`, file.name);
     const fileExt = file.name ? file.name.split('.').pop() : 'png';
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
     const filePath = `public/${fileName}`;
@@ -781,7 +781,7 @@ export async function uploadImageAndUpdatePost(postId, file, updatedFields = {})
       .upload(filePath, file);
 
     if (uploadError) {
-      console.error('❌ [Supabase Storage Error]: Failed to upload image:', uploadError.message);
+      console.error('[Supabase Storage Error]: Failed to upload image:', uploadError.message);
       throw new Error(`Supabase Storage upload failed: ${uploadError.message}`);
     }
 
@@ -791,7 +791,7 @@ export async function uploadImageAndUpdatePost(postId, file, updatedFields = {})
 
     if (urlData?.publicUrl) {
       imageUrl = urlData.publicUrl;
-      console.log('✅ [Supabase Storage Success]: Public image URL generated:', imageUrl);
+      console.log('[Supabase Storage Success]: Public image URL generated:', imageUrl);
     }
   }
 
